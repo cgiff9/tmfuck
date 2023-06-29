@@ -22,7 +22,7 @@ contain multiple strings per line.
 ## Usage
 ```
 $ ./otto <machine file> <input string>
-$./otto samples/auto_divBy8.txt 1000
+$ ./otto samples/auto_divBy8.txt 1000
 ==>1000
 	ACCEPTED
 ```
