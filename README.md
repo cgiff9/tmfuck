@@ -11,9 +11,9 @@ make otto
 ```
 -v				verbose
 -d				make deterministic
--r <string>		regex string
+-r <string>			regex string
 -m				minimize (DFA)
--f <file>		input string file
+-f <file>			input string file
 ```
 The verbose flag will show state transition
 information. The file supplied to '-f' may
@@ -45,7 +45,7 @@ may be supplied. For each line, the state is typed
 followed by a colon. Transitions are specified
 by a character, followed by a '>', followed by
 a state name. Transition characters may be
-specified with single quotes "'", ie:
+specified with single quotes, ie.:
 
 ```
 q0: ';'>q0; 'a'>q1;
