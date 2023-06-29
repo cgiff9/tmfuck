@@ -11,9 +11,9 @@ make otto
 ```
 -v				verbose
 -d				make deterministic
--r <string>			regex string
+-r <string>		regex string
 -m				minimize (DFA)
--f <file>			input string file
+-f <file>		input string file
 ```
 The verbose flag will show state transition
 information. The file supplied to '-f' may

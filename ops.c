@@ -160,14 +160,6 @@ struct AutomatonList *partition(struct AutomatonList *al0, struct Automaton *a0)
 	return al1;
 }
 
-void AutomatonList_sort(struct AutomatonList *al0)
-{
-	struct Automaton *start;
-	for (int i = 0; i < al0->len; i++) {
-		
-	}
-}
-
 struct Automaton *purge_unreachable(struct Automaton *a0)
 {
 	struct Automaton *visited = Automaton_create();
