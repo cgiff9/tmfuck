@@ -55,6 +55,12 @@ list of state names:
 ```
 q0: 'a'>q0,q1;
 ```
+For NFAs, an empty string transition can be supplied
+by typing '>' with no preceding character:
+```
+q1: >q0,q2; a>q0;
+```
+
 Note that each transition ends with a semicolon (;).
 
 
