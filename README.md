@@ -9,15 +9,16 @@ make otto
 
 ## Arguments
 ```
--v				verbose
--d				make deterministic
--r <string>			regex string
--m				minimize (DFA)
--f <file>			input string file
+-v              verbose
+-d              make deterministic
+-r <string>     regex string
+-m              minimize (DFA)
+-f <file>       input string file
 ```
 The verbose flag will show state transition
-information. The file supplied to '-f' may
-contain multiple strings per line.
+information. The file supplied to the '-f' 
+argument may contain multiple strings with 
+one per line.
 
 ## Usage
 ```
@@ -65,7 +66,7 @@ Note that each transition ends with a semicolon (;).
 
 
 ## Regex
-Using the '-r' flag, a regex string may be supplied
+Using the '-r' argument, a regex string may be supplied
 supporting a few operations:
 ```
 a*			Kleene star
@@ -79,3 +80,5 @@ $./otto -r '(ab)*' ababab
 ==>ababab
 	ACCEPTED
 ```
+This NFA, or any NFA supplied by file, can be converted
+to a minimal DFA with the '-d' argument.
