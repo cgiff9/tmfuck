@@ -1,6 +1,7 @@
 # OTTO
 
-A tool for playing around with DFAs and NFAs
+A tool for building DFAs, NFAs,
+and PDAs.
 
 ## Building
 ```
