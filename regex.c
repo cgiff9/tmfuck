@@ -5,55 +5,55 @@
 #include "auto.h"
 #include "regex.h"
 
-struct Stack *stack_create()
+struct CharStack *CharStack_create()
 {
-	struct Stack *new_stack = malloc(sizeof(struct Stack));
+	struct CharStack *new_stack = malloc(sizeof(struct CharStack));
 	return new_stack;
 }
 
-struct Node *node_create(char value)
+struct CharNode *CharNode_create(char value)
 {
-	struct Node *new_node = malloc(sizeof(struct Node));
+	struct CharNode *new_node = malloc(sizeof(struct CharNode));
 	new_node->value = value;
 	new_node->next = NULL;
 	return new_node;
 }
 
-void Stack_push(struct Stack *stack, char value)
+void CharStack_push(struct CharStack *stack, char value)
 {
-	struct Node *new_top = node_create(value);
+	struct CharNode *new_top = CharNode_create(value);
 	new_top->next = stack->top;
 	stack->top = new_top;
 	stack->len++;
 }
 
-char Stack_pop(struct Stack *stack)
+char CharStack_pop(struct CharStack *stack)
 {
 	if (stack->top == NULL) return '\0';
 	char value = stack->top->value;
-	struct Node *new_top = stack->top->next;
+	struct CharNode *new_top = stack->top->next;
 	free(stack->top);
 	stack->top = new_top;
 	stack->len--;
 	return value;
 }
 
-char Stack_peek(struct Stack *stack)
+char CharStack_peek(struct CharStack *stack)
 {
 	if (stack->top == NULL) return '\0';
 	else return stack->top->value;
 }
 
-void Stack_destroy(struct Stack *stack)
+void CharStack_destroy(struct CharStack *stack)
 {
-	char c = Stack_pop(stack);
-	while (c != '\0') c = Stack_pop(stack);
+	char c = CharStack_pop(stack);
+	while (c != '\0') c = CharStack_pop(stack);
 	free(stack);
 }
 
-void stack_print(struct Stack *stack)
+void CharStack_print(struct CharStack *stack)
 {
-	struct Node *n = stack->top;
+	struct CharNode *n = stack->top;
 	while (n != NULL) {
 		printf("%c", n->value);
 		n = n->next;
@@ -187,19 +187,19 @@ char *infix(char *regex)
 		exit(EXIT_FAILURE);
 	}
 
-	struct Stack *stack = stack_create();
+	struct CharStack *stack = CharStack_create();
 	char *tmp = malloc(sizeof(char) * strlen(regex)*2);
 	*tmp = '\0';
 	int concat_detect = 0;
 	for (int i = 0; regex[i] != '\0'; i++) {
 		if (concat_detect) {
-			char peek = Stack_peek(stack);
+			char peek = CharStack_peek(stack);
 			while (peek == '*' || peek == '_' || peek == '+' && peek != '\0') {
-				char c = Stack_pop(stack);
+				char c = CharStack_pop(stack);
 				strncat(tmp, &c, 1);
-				peek = Stack_peek(stack);
+				peek = CharStack_peek(stack);
 			}
-			Stack_push(stack, '_');
+			CharStack_push(stack, '_');
 			concat_detect = 0;
 		}
 		if (isalnum(regex[i]) && isalnum(regex[i+1]) || 
@@ -216,53 +216,53 @@ char *infix(char *regex)
 		if (isalnum(regex[i])) {
 			strncat(tmp, &regex[i], 1);
 		} else if (regex[i] == '*' || regex[i] == '+') {
-			char peek = Stack_peek(stack);
+			char peek = CharStack_peek(stack);
 			while (peek == '*' || peek == '+' && peek != '\0') {
-				char c = Stack_pop(stack);
+				char c = CharStack_pop(stack);
 				strncat(tmp, &c, 1);
-				peek = Stack_peek(stack);
+				peek = CharStack_peek(stack);
 			}
 			if (regex[i] == '*') 
-				Stack_push(stack, '*');
-			else Stack_push(stack, '+');
+				CharStack_push(stack, '*');
+			else CharStack_push(stack, '+');
 		} else if (regex[i] == '|') {
-			char peek = Stack_peek(stack);
+			char peek = CharStack_peek(stack);
 			while (peek == '*' || peek == '+' || peek == '_' || peek == '|' && peek != '\0') {
-				char c = Stack_pop(stack);
+				char c = CharStack_pop(stack);
 				strncat(tmp, &c, 1);
-				peek = Stack_peek(stack);
+				peek = CharStack_peek(stack);
 			}
-			Stack_push(stack, '|');
+			CharStack_push(stack, '|');
 		} else if (regex[i] == '(') { 
-			Stack_push(stack, '(');
+			CharStack_push(stack, '(');
 		} else if (regex[i] == ')') {
-			char peek = Stack_peek(stack);
+			char peek = CharStack_peek(stack);
 			while (peek != '(' && peek != '\0') {
-				char c = Stack_pop(stack);
+				char c = CharStack_pop(stack);
 				strncat(tmp, &c, 1);
-				peek = Stack_peek(stack);
+				peek = CharStack_peek(stack);
 			}
-			if (peek == '(') Stack_pop(stack);
+			if (peek == '(') CharStack_pop(stack);
 			else if (peek == '\0') {
 				fprintf(stderr, "Parentheses mismatch\n");
 				exit(EXIT_FAILURE);
 			}
 		
 		}
-		//stack_print(stack);
+		//Stack_print(stack);
 	}
-	char peek = Stack_peek(stack);
+	char peek = CharStack_peek(stack);
 	while (peek != '\0') {
 		if (peek == '(') {
 			fprintf(stderr, "Parentheses mismatch\n");
 			exit(EXIT_FAILURE);
 		}
 
-		char c = Stack_pop(stack);
+		char c = CharStack_pop(stack);
 		strncat(tmp, &c, 1);
-		peek = Stack_peek(stack);
+		peek = CharStack_peek(stack);
 	}
-	Stack_destroy(stack);
+	CharStack_destroy(stack);
 	return tmp;
 }
 
@@ -275,7 +275,7 @@ struct Automaton *Automaton_concat(struct Automaton *a0, struct Automaton *a1)
 	new_auto->start = a0->start;
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			struct Transition *new_trans = Transition_create('\0', a1->start);
+			struct Transition *new_trans = Transition_create('\0', a1->start, '\0', '\0');
 			a0->states[i]->final = 0;
 			Transition_add(a0->states[i], new_trans);
 		}
@@ -307,8 +307,8 @@ struct Automaton *Automaton_union(struct Automaton *a0, struct Automaton *a1)
 	struct Automaton *new_auto = Automaton_create();
 
 	struct State *new_start = State_create("q0");
-	struct Transition *new_trans0 = Transition_create('\0', a0->start);
-	struct Transition *new_trans1 = Transition_create('\0', a1->start);
+	struct Transition *new_trans0 = Transition_create('\0', a0->start, '\0', '\0');
+	struct Transition *new_trans1 = Transition_create('\0', a1->start, '\0', '\0');
 	Transition_add(new_start, new_trans0);
 	Transition_add(new_start, new_trans1);
 	new_start->start = 1;
@@ -346,14 +346,14 @@ struct Automaton *Automaton_star(struct Automaton *a0)
 	new_start->start = 1;
 	new_start->final = 1;
 	
-	struct Transition *new_trans = Transition_create('\0', a0->start);
+	struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0');
 	Transition_add(new_start, new_trans);
 	State_add(new_auto, new_start);
 	new_auto->start = new_start;
 
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			new_trans = Transition_create('\0', a0->start);
+			new_trans = Transition_create('\0', a0->start, '\0', '\0');
 			Transition_add(a0->states[i], new_trans);
 		}
 		if (a0->states[i]->start) a0->states[i]->start = 0;
@@ -375,7 +375,7 @@ struct Automaton *Automaton_plus(struct Automaton *a0)
 	new_auto->start = a0->start;
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			struct Transition *new_trans = Transition_create('\0', a0->start);
+			struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0');
 			Transition_add(a0->states[i], new_trans);
 		}
 		State_add(new_auto, a0->states[i]);
@@ -394,7 +394,7 @@ struct Automaton *Automaton_char(char symbol)
 	
 	q0->start = 1;
 	q1->final = 1;
-	struct Transition *trans = Transition_create(symbol, q1);
+	struct Transition *trans = Transition_create(symbol, q1, '\0', '\0');
 	Transition_add(q0, trans);
 	
 	State_add(a0, q0);
@@ -427,7 +427,7 @@ struct AutoNode *AutoNode_create(struct Automaton *a0)
 	return n0;
 }
 
-void AutoStack_push(struct AutoStack *stack, struct Automaton *a0)
+void AutoCharStack_push(struct AutoStack *stack, struct Automaton *a0)
 {
 	struct AutoNode *new_top = AutoNode_create(a0);
 	new_top->next = stack->top;
@@ -471,25 +471,25 @@ struct Automaton *regex_to_nfa(char *regex)
 	for (int i=0; regex_infix[i] != '\0'; i++) {
 		if (isalnum(regex_infix[i])) {
 			struct Automaton *a0 = Automaton_char(regex_infix[i]);
-			AutoStack_push(stack, a0);
+			AutoCharStack_push(stack, a0);
 		} else if (regex_infix[i] == '*') {
 			struct Automaton *top = AutoStack_pop(stack);
 			struct Automaton *new_top = Automaton_star(top);
-			AutoStack_push(stack, new_top);	
+			AutoCharStack_push(stack, new_top);	
 		} else if (regex_infix[i] == '+') {
 			struct Automaton *top = AutoStack_pop(stack);
 			struct Automaton *new_top = Automaton_plus(top);
-			AutoStack_push(stack, new_top);
+			AutoCharStack_push(stack, new_top);
 		} else if (regex_infix[i] == '|') {
 			struct Automaton *top = AutoStack_pop(stack);
 			struct Automaton *next = AutoStack_pop(stack);
 			struct Automaton *new_top = Automaton_union(next, top);
-			AutoStack_push(stack, new_top);
+			AutoCharStack_push(stack, new_top);
 		} else if (regex_infix[i] == '_') {
 			struct Automaton *top = AutoStack_pop(stack);
 			struct Automaton *next = AutoStack_pop(stack);
 			struct Automaton *new_top = Automaton_concat(next, top);
-			AutoStack_push(stack, new_top);
+			AutoCharStack_push(stack, new_top);
 		}
 	}
 	struct Automaton *a0 = AutoStack_pop(stack);
@@ -517,7 +517,7 @@ struct Automaton *automaton_dup(struct Automaton *automaton)
 		for (int j = 0; j < old_state->num_trans; j++) {
 			char *name_to = old_state->trans[j]->state->name;
 			struct State *new_to = get_state(new_auto, name_to);
-			struct Transition *new_trans = Transition_create(old_state->trans[j]->symbol, new_to);
+			struct Transition *new_trans = Transition_create(old_state->trans[j]->symbol, new_to, '\0', '\0');
 			Transition_add(new_state, new_trans);
 		}
 	}

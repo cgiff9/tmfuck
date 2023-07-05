@@ -64,6 +64,27 @@ q1: >q0,q2; a>q0;
 
 Note that each transition ends with a semicolon (;).
 
+## Pushdown Automata
+The file format can be extended to support pushdown 
+automata, or PDAs. The following example recognizes
+a number of 0s followed by the same number of 1s:
+```
+start: q1;
+final: q1, q4;
+q1: >q2 (>$);
+q2: 0>q2 (>0); 1>q3 (0>);
+q3: 1>q3 (0>); >q4 ($>);
+q4:
+```
+In parentheses following the destination state of
+the transition, stack operations can be defined.
+```
+(>x)         push an 'x'
+(x>)         pop an 'x'
+(x>y)        pop 'x' and push 'y'
+```
+These stack characters can also be specified within
+single quotes.
 
 ## Regex
 Using the '-r' argument, a regex string may be supplied

@@ -4,6 +4,7 @@
 #include "auto.h"
 #include "regex.h"
 #include "ops.h"
+#include "stack.h"
 
 int main(int argc, char **argv)
 {
@@ -77,8 +78,13 @@ int main(int argc, char **argv)
 	} else if (machine_file)
 		a0 = Automaton_import(machine_file);
 
+	// 0 for NFA
+	// 1 for DFA
+	// 2 for PDA
+	int machine_code = isDFA(a0);
+	
 	if (deterministic) {
-		if (!isDFA(a0)) {
+		if (machine_code == 0) {
 			if (flag_verbose) {
 				printf("[ NFA: ]\n");
 				Automaton_print(a0);
@@ -89,7 +95,7 @@ int main(int argc, char **argv)
 			Automaton_destroy(a0);
 			Automaton_destroy(a1);
 			a0 = a2;
-		} else {
+		} else if (machine_code == 1) {
 			if (flag_verbose) {
 				printf("[ DFA: ]\n");
 				Automaton_print(a0);
@@ -102,7 +108,7 @@ int main(int argc, char **argv)
 	}
 	
 	if (minimize && !deterministic) {
-		if (isDFA(a0)) {
+		if (machine_code == 1) {
 			if (flag_verbose) {
 				printf("[ DFA: ]\n");
 				Automaton_print(a0);
@@ -111,13 +117,12 @@ int main(int argc, char **argv)
 			struct Automaton *a1 = DFA_minimize(a0);
 			Automaton_destroy(a0);
 			a0 = a1;
-			//if (flag_verbose) Automaton_print(a0);
 		}
 	}
 	
 	if (input_string_file) {
 		if (input_string) {
-			if (isDFA(a0)) {
+			if (machine_code == 1) {
 				if (flag_verbose) Automaton_print(a0);
 				DFA_run(a0, input_string);
 			} else { 
@@ -129,7 +134,7 @@ int main(int argc, char **argv)
 			Automaton_run_file(a0, input_string_file);
 		}
 	} else if (input_string) {
-		if (isDFA(a0)) {
+		if (machine_code == 1) {
 			if (flag_verbose) Automaton_print(a0);
 			DFA_run(a0, input_string);
 		} else {

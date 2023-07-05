@@ -16,6 +16,8 @@ struct Automaton {
 struct Transition {
 	char symbol;
 	struct State *state;
+	char readsym;
+	char writesym;
 };
 
 struct State {
@@ -32,7 +34,7 @@ struct Automaton *Automaton_create();
 struct State* get_state(struct Automaton *automaton, char *name);
 void State_name_add(struct Automaton *automaton, char *name);
 void State_add(struct Automaton *automaton, struct State *state);
-struct Transition *Transition_create(char symbol, struct State *state);
+struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym);
 void Transition_add(struct State *state, struct Transition *trans);
 void State_destroy(struct State *state);
 void Automaton_destroy(struct Automaton *automaton);
@@ -43,6 +45,7 @@ int isnamechar(char c);
 struct Automaton *Automaton_import(char *filename);
 int isDFA(struct Automaton *automaton);
 int DFA_run(struct Automaton *automaton, char *input);
+//int Machine_advance(struct MultiStackList *source, struct MultiStackList *target, struct Automaton *automaton, struct State *state, struct Transition *trans);
 int Automaton_run(struct Automaton *automaton, char *input);
 void Automaton_run_file(struct Automaton *automaton, char *input_string_file);
 

@@ -1,14 +1,14 @@
 #ifndef REGEX_H_
 #define REGEX_H_
 
-struct Node {
+struct CharNode {
 	char value;
-	struct Node *next;
+	struct CharNode *next;
 };
 
-struct Stack {
+struct CharStack {
 	int len;
-	struct Node *top;
+	struct CharNode *top;
 };
 
 struct AutoNode {
@@ -21,13 +21,13 @@ struct AutoStack {
 	struct AutoNode *top;
 };
 
-struct Stack *stack_create();
-struct Node *node_create(char value);
-void stack_push(struct Stack *stack, char value);
-char stack_pop(struct Stack *stack);
-char stack_peek(struct Stack *stack);
-void stack_destroy(struct Stack *stack);
-void stack_print(struct Stack *stack);
+struct CharStack *CharStack_create();
+struct CharNode *Node_create(char value);
+void CharStack_push(struct CharStack *stack, char value);
+char CharStack_pop(struct CharStack *stack);
+char CharStack_peek(struct CharStack *stack);
+void CharStack_destroy(struct CharStack *stack);
+void CharStack_print(struct CharStack *stack);
 void remove_spaces(char *s);
 char *infix(char *regex);
 int is_valid_regex(char *regex);
