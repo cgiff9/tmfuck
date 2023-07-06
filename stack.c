@@ -197,25 +197,3 @@ void Stack_add_to(struct MultiStackList *msl0, struct State *s0, struct Stack *s
 	
 	
 }
-
-void MultiStack_push(struct MultiStackList *msl0, struct State *s0, char symbol)
-{
-	struct MultiStack *ms0 = NULL;
-	for (int i = 0; i < msl0->len; i++) {
-		if (msl0->mstacks[i]->state == s0)
-			ms0 = msl0->mstacks[i];
-	}
-	
-	// Create MultiStack if it doesn't exist
-	if (ms0 == NULL) {
-		ms0 = MultiStack_create(s0);
-		struct Stack *new_stack = Stack_create();
-		Stack_add(ms0, new_stack);
-		MultiStack_add(msl0, ms0);
-	}
-	
-	// Push symbol to all stacks within ms0
-	for (int i = 0; i < ms0->len; i++) {
-		Stack_push(ms0->stacks[i], symbol);
-	}
-}

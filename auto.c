@@ -973,13 +973,13 @@ int Automaton_run(struct Automaton *automaton, char *input)
 	for (int i = 0; i < current_states->len; i++) {
 		if (current_states->states[i]->final) { 
 			printf("=>%s\n\tACCEPTED\n", input);
-			//MultiStackList_destroy(current_stacks);
+			MultiStackList_destroy(current_stacks);
 			Automaton_clear(current_states);
 			return 0;
 		}
 	}
 	Automaton_clear(current_states);
-	//MultiStackList_destroy(current_stacks);
+	MultiStackList_destroy(current_stacks);
 	printf("=>%s\n\tREJECTED\n", input);
 	return 1;
 
@@ -1002,7 +1002,7 @@ void Automaton_run_file(struct Automaton *automaton, char *input_string_file)
 	while ((read = getline(&input_string, &len, input_string_fp)) != -1)
 	{
 		input_string[strcspn(input_string, "\r\n")] = 0;
-		if (is_dfa)
+		if (is_dfa == 1)
 			DFA_run(automaton, input_string);
 		else
 			Automaton_run(automaton, input_string);
