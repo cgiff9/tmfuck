@@ -58,7 +58,6 @@ struct Stack *Stack_copy(struct Stack *stack)
 	struct Stack *new_stack = Stack_create();
 	new_stack->len = stack->len;
 	new_stack->max_len = stack->max_len;
-	//new_stack->stack = strdup(stack->stack);
 	new_stack->stack = realloc(new_stack->stack, sizeof (char) * (new_stack->max_len+1));
 	if (new_stack->stack == NULL) {
 		fprintf(stderr, "Error allocating memory for copy of stack\n");

@@ -802,15 +802,15 @@ int DFA_run(struct Automaton *automaton, char *input)
 			}
 		}
 		if (none) {
-			printf("==>%s\n\tREJECTED\n", input);
+			printf("=>%s\n\tREJECTED\n", input);
 			return 0;
 		}
 	}
 	if (state->final) {
-		printf("==>%s\n\tACCEPTED\n", input);
+		printf("=>%s\n\tACCEPTED\n", input);
 		return 1;
 	} else {
-		printf("==>%s\n\tREJECTED\n", input);
+		printf("=>%s\n\tREJECTED\n", input);
 		return 0;
 	}
 }
@@ -819,9 +819,10 @@ int Machine_advance(struct MultiStackList *source, struct MultiStackList *target
 	struct Automaton *automaton, struct State *state, struct Transition *trans)
 {
 	// STACK OPERATIONS
-	// nothing
+
 	char readsym = trans->readsym;
 	char writesym = trans->writesym;
+	// do not push or pop
 	if (readsym == '\0' && writesym == '\0') {
 		struct MultiStack *mstmp = MultiStack_get(source, state);
 		if (mstmp != NULL) {
@@ -851,7 +852,7 @@ int Machine_advance(struct MultiStackList *source, struct MultiStackList *target
 		State_add(automaton, trans->state);
 		return 1;
 	// read/pop (and possibly write/push)
-	} else if (trans->readsym != '\0') { //&& trans->writesym == '\0') {
+	} else if (trans->readsym != '\0') {
 		struct MultiStack *mstmp = MultiStack_get(source, state);
 		if (mstmp != NULL) {
 			int state_added = 0;
@@ -893,7 +894,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 					printf("\t%s > %s", state->name, trans->state->name);
 					if (trans->state->final) printf(" (F)"); //else printf("\n");
 					struct MultiStack *mstmp = MultiStack_get(current_stacks, trans->state);
-					if (mstmp && mstmp->len != 0) {
+					if (mstmp) {
 						for (int k = 0; k < mstmp->len; k++)
 							printf(" %s", mstmp->stacks[k]->stack);
 					}
@@ -920,7 +921,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 						printf("\t%s > %s", state->name, trans->state->name);
 						if (trans->state->final) printf(" (F)"); 
 						struct MultiStack *mstmp = MultiStack_get(next_stacks, trans->state);
-						if (mstmp && mstmp->len != 0) {
+						if (mstmp) {
 							for (int k = 0; k < mstmp->len; k++)
 								printf(" %s", mstmp->stacks[k]->stack);
 						}
@@ -941,7 +942,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 						printf("\t%s > %s", state->name, state->trans[k]->state->name);
 						if (state->trans[k]->state->final) printf(" (F)");
 						struct MultiStack *mstmp = MultiStack_get(next_stacks, trans->state);
-						if (mstmp && mstmp->len != 0) {
+						if (mstmp) {
 							for (int k = 0; k < mstmp->len; k++)
 								printf(" %s", mstmp->stacks[k]->stack);
 						}
