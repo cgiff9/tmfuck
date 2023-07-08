@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 
 	int opt;
 	int nonopt_index = 0;
-	while ((opt = getopt (argc, argv, "-:vf:r:dm")) != -1)
+	while ((opt = getopt (argc, argv, "-:vf:r:dms:")) != -1)
 	{
 		switch (opt)
 		{
@@ -36,6 +36,10 @@ int main(int argc, char **argv)
 				break;
 			case 'm':
 				minimize = 1;
+				break;
+			case 's':
+				delay = atof(optarg);
+				flag_verbose = 1;
 				break;
 			case '?':
 				fprintf(stderr, "Unknown option '-%c'\n", optopt);
@@ -92,6 +96,7 @@ int main(int argc, char **argv)
 			}
 			struct Automaton *a1 = nfa_to_dfa(a0);
 			struct Automaton *a2 = DFA_minimize(a1);
+			machine_code = 1;
 			Automaton_destroy(a0);
 			Automaton_destroy(a1);
 			a0 = a2;
@@ -102,6 +107,7 @@ int main(int argc, char **argv)
 				printf("[ MINIMIZED TO DFA: ]\n");
 			}
 			struct Automaton *a1 = DFA_minimize(a0);
+			machine_code = 1;
 			Automaton_destroy(a0);
 			a0 = a1;
 		}
@@ -115,6 +121,7 @@ int main(int argc, char **argv)
 				printf("[ MINIMIZED TO DFA: ]\n");
 			}
 			struct Automaton *a1 = DFA_minimize(a0);
+			machine_code = 1;
 			Automaton_destroy(a0);
 			a0 = a1;
 		}

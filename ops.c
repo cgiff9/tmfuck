@@ -1,8 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "auto.h"
 #include "ops.h"
+
+//int nsleep(long milliseconds)
+int nsleep(double seconds)
+{
+	double fraction = seconds - ((long)seconds);
+	long milliseconds = (seconds+(long)fraction*1000) * 1000;
+	struct timespec req, rem;
+	if(milliseconds > 999) {   
+		req.tv_sec = (int)(milliseconds / 1000); 
+		req.tv_nsec = (milliseconds - ((long)req.tv_sec * 1000)) * 1000000; 
+	} else {   
+		req.tv_sec = 0;
+		req.tv_nsec = milliseconds * 1000000;
+	}   
+	return nanosleep(&req , &rem);
+}
 
 struct Automaton *e_closure(struct State *state)
 {
@@ -51,7 +68,7 @@ int Automaton_equiv(struct Automaton *a0, struct Automaton *a1)
 	return 1;
 }
 
-int get_automaton(struct AutomatonList *al0, struct Automaton *a0)
+int Automaton_get(struct AutomatonList *al0, struct Automaton *a0)
 {
 	for (int i = 0; i < al0->len; i++) {
 		if (Automaton_equiv(al0->automatons[i], a0)) return i;
@@ -61,7 +78,7 @@ int get_automaton(struct AutomatonList *al0, struct Automaton *a0)
 
 int Automaton_add(struct AutomatonList *al0, struct Automaton *a0) 
 {
-	if (get_automaton(al0, a0) > -1) return 0;
+	if (Automaton_get(al0, a0) > -1) return 0;
 	al0->len++;
 	if (al0->len > al0->max_len) {
 		al0->max_len *= 2;
@@ -81,7 +98,7 @@ int AutomatonList_equiv(struct AutomatonList *al0, struct AutomatonList *al1)
 	if (al0->len == 0 && al1->len == 0) return 1;
 	for (int i = 0; i < al0->len; i++) {
 		struct Automaton *a0 = al0->automatons[i];
-		if (get_automaton(al1, a0) == - 1) return 0; 
+		if (Automaton_get(al1, a0) == - 1) return 0; 
 	}
 	return 1;
 }
@@ -89,7 +106,7 @@ int AutomatonList_equiv(struct AutomatonList *al0, struct AutomatonList *al1)
 int State_group_index(struct AutomatonList *al0, struct State *s0)
 {
 		for (int i = 0; i < al0->len; i++) {
-			struct State *stmp0 = get_state(al0->automatons[i], s0->name);
+			struct State *stmp0 = State_get(al0->automatons[i], s0->name);
 			if (s0 == stmp0) return i;
 		}
 		return -1;
@@ -351,7 +368,7 @@ struct Automaton *nfa_to_dfa(struct Automaton *automaton)
 			}
 			// Add transitions
 			int added = Automaton_add(al0, new_auto);
-			int trans_index = get_automaton(al0, new_auto);
+			int trans_index = Automaton_get(al0, new_auto);
 			if (!added) Automaton_clear(new_auto);
 			if (trans_index == a0->len) {
 				snprintf(name,STATE_NAME_MAX, "q%d", a0->len);

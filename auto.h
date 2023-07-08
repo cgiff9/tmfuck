@@ -4,6 +4,7 @@
 #define STATE_NAME_MAX 100
 
 extern int flag_verbose;
+extern double delay;
 
 struct Automaton {
 	int max_len;
@@ -31,7 +32,7 @@ struct State {
 
 struct State *State_create(char *name);
 struct Automaton *Automaton_create();
-struct State* get_state(struct Automaton *automaton, char *name);
+struct State* State_get(struct Automaton *automaton, char *name);
 void State_name_add(struct Automaton *automaton, char *name);
 void State_add(struct Automaton *automaton, struct State *state);
 struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym);

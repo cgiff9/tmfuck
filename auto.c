@@ -5,8 +5,10 @@
 #include "auto.h"
 #include "regex.h"
 #include "stack.h"
+#include "ops.h"
 
 int flag_verbose = 0;
+double delay = 0;
 
 struct State *State_create(char *name)
 {
@@ -45,7 +47,7 @@ struct Automaton *Automaton_create()
 	return automaton;
 }
 
-struct State* get_state(struct Automaton *automaton, char *name)
+struct State* State_get(struct Automaton *automaton, char *name)
 {
 	for (int i = 0; i < automaton->len; i++) {
 		if (strcmp(automaton->states[i]->name, name) == 0) {
@@ -57,7 +59,7 @@ struct State* get_state(struct Automaton *automaton, char *name)
 
 void State_name_add(struct Automaton *automaton, char *name)
 {
-	struct State *test = get_state(automaton, name);
+	struct State *test = State_get(automaton, name);
 	if (test == NULL) {
 		struct State *new_state = State_create(name);
 		automaton->len++;
@@ -217,7 +219,10 @@ struct Automaton *Automaton_import(char *filename)
 	ssize_t read;
 
 	fp = fopen(filename, "r");
-	if (fp == NULL) exit(EXIT_FAILURE);
+	if (fp == NULL) { 
+		fprintf(stderr, "Error opening %s\n", filename);
+		exit(EXIT_FAILURE);
+	}
 
 	char name[STATE_NAME_MAX], 
 		 state[STATE_NAME_MAX],
@@ -227,14 +232,14 @@ struct Automaton *Automaton_import(char *filename)
 	char alphabet[100];
 	int linenum=1;
 
+	int mystate=1;
 	struct Automaton *automaton = Automaton_create();
 	while ((read = getline(&line, &len, fp)) != -1) {
 			int i = 0;
 			int j = 0;
 			int spaces = 0;
-			int mystate=1;
 			for (i = 0; line[i] != '\0'; i++) {
-				//printf("mystate: %d, line[i]: %c\n", mystate, line[i]);
+				// printf("mystate: %d, line[i]: %c\n", mystate, line[i]);
 				
 				switch (mystate) {
 					// Ensure state name is at least one char
@@ -272,6 +277,7 @@ struct Automaton *Automaton_import(char *filename)
 					// Begin parsing state transitions
 					case 3:
 						if (isnamechar(line[i])) {
+							j = i;
 							symbol = line[i];
 							mystate = 4;
 						// For empty string transitions
@@ -294,6 +300,22 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 5;
 						} else if (isspace(line[i])) {
 							mystate = 14;
+						} else if (line[i] == ':') {
+							*name = '\0';
+							strncat(name, line+j, i-j);
+							
+							if (!strcmp(name, "start")) {
+								j = i + 1;
+								mystate = 20;
+							} else if (!strcmp(name, "final")) {
+								j = i + 1;
+								mystate = 21;
+							} else {
+								State_name_add(automaton, name);
+								mystate = 3;
+							}
+						} else if (isnamechar(line[i])) {
+							mystate = 2;
 						} else mystate = 8;
 						break;;
 					// Ensure destination state in transition consists of at least one char
@@ -314,8 +336,8 @@ struct Automaton *Automaton_import(char *filename)
 							strncat(state, line+j, i-j);
 
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, '\0', '\0');
 							Transition_add(from, new_trans);
 
@@ -327,8 +349,8 @@ struct Automaton *Automaton_import(char *filename)
 							j = i + 1;
 
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, '\0', '\0');
 							Transition_add(from, new_trans);
 
@@ -343,6 +365,11 @@ struct Automaton *Automaton_import(char *filename)
 						} else mystate = 8;
 						break;;
 					// state 7 is an accept state for comments
+					case 7:
+						if (line[i] == '\n')
+							mystate = 3;
+						else mystate = 7;
+						break;
 					// Error
 					case 8:
 						fprintf(stderr,"Error on line %d\n", linenum);
@@ -426,6 +453,22 @@ struct Automaton *Automaton_import(char *filename)
 							j = i + 1;
 							mystate = 5;
 							spaces = 0;
+						} else if (line[i] == ':') {
+							*name = '\0';
+							strncat(name, line+j, i-j);
+							
+							if (!strcmp(name, "start")) {
+								j = i + 1;
+								mystate = 20;
+							} else if (!strcmp(name, "final")) {
+								j = i + 1;
+								mystate = 21;
+							} else {
+								State_name_add(automaton, name);
+								mystate = 3;
+							}
+						} else if (isnamechar(line[i])) {
+							mystate = 2;
 						} else
 							mystate = 8;
 						break;
@@ -452,8 +495,8 @@ struct Automaton *Automaton_import(char *filename)
 							j = i + 1;
 
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, '\0', '\0');
 							Transition_add(from, new_trans);
 							printf("Added transition %s", from->name);
@@ -465,8 +508,8 @@ struct Automaton *Automaton_import(char *filename)
 							strncat(state, line+j, i-j-spaces);
 
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, '\0', '\0');
 							Transition_add(from, new_trans);
 							printf("Added transition %s", from->name);
@@ -487,6 +530,7 @@ struct Automaton *Automaton_import(char *filename)
 							*start = '\0';
 							strncat(start, line+j, i-j);
 							remove_spaces(start);
+							mystate = 3;
 						} else mystate = 20;
 						break;
 					// line represents the final state(s)
@@ -495,6 +539,7 @@ struct Automaton *Automaton_import(char *filename)
 							*final = '\0';
 							strncat(final, line+j, i-j);
 							remove_spaces(final);
+							mystate = 3;
 						} else mystate = 21;
 						break;						
 					// BEGIN PDA EXTENSION
@@ -535,8 +580,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 43;
 						} else if (line[i] == ',') {
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym);
 							Transition_add(from, new_trans);
 							
@@ -544,8 +589,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 5;
 						} else if (line[i] == ';') {
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym);
 							Transition_add(from, new_trans);
 						
@@ -619,8 +664,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 43;
 						} else if (line[i] == ',') {
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym);
 							Transition_add(from, new_trans);
 							
@@ -628,8 +673,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 5;
 						} else if (line[i] == ';') {
 							State_name_add(automaton, state);
-							struct State *from = get_state(automaton, name);
-							struct State *to = get_state(automaton, state);
+							struct State *from = State_get(automaton, name);
+							struct State *to = State_get(automaton, state);
 							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym);
 							Transition_add(from, new_trans);
 							
@@ -693,11 +738,9 @@ struct Automaton *Automaton_import(char *filename)
 						break;
 						
 				}
-				
-				if (mystate == 7) break;
 			}
 			
-			if (mystate != 3 && mystate !=13 && mystate != 20 && mystate != 21 && mystate != 7) {
+			if (mystate != 3 && mystate !=13) { //&& mystate != 20 && mystate != 21 && mystate != 7) {
 				fprintf(stderr, "Error on line %d\n", linenum);
 				free(line);
 				fclose(fp);
@@ -714,7 +757,7 @@ struct Automaton *Automaton_import(char *filename)
 	char *s;
 	s = strtok(final, ",");
 	while (s != NULL) {
-		struct State *f = get_state(automaton, s);
+		struct State *f = State_get(automaton, s);
 		if (f == NULL) {
 			fprintf(stderr,"No final state %s detected\n", s);
 			Automaton_destroy(automaton);
@@ -725,7 +768,7 @@ struct Automaton *Automaton_import(char *filename)
 	}
 
 	// Set start state
-	struct State *f = get_state(automaton, start);
+	struct State *f = State_get(automaton, start);
 	if (f == NULL) {
 		fprintf(stderr, "No start state %s detected\n", start);
 		Automaton_destroy(automaton);
@@ -801,6 +844,9 @@ int DFA_run(struct Automaton *automaton, char *input)
 				break;
 			}
 		}
+		
+		if (delay) nsleep(delay);
+		
 		if (none) {
 			printf("=>%s\n\tREJECTED\n", input);
 			return 0;
@@ -819,7 +865,6 @@ int Machine_advance(struct MultiStackList *source, struct MultiStackList *target
 	struct Automaton *automaton, struct State *state, struct Transition *trans)
 {
 	// STACK OPERATIONS
-
 	char readsym = trans->readsym;
 	char writesym = trans->writesym;
 	// do not push or pop
@@ -884,6 +929,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 	
 	// Add empty string transitions to current array
 	State_add(current_states, automaton->start);
+	int printed_string = 0;
 	for (int i = 0; i < current_states->len; i++) {
 		struct State *state = current_states->states[i];
 		for (int j = 0; j < state->num_trans; j++) {
@@ -891,6 +937,10 @@ int Automaton_run(struct Automaton *automaton, char *input)
 			if (state->trans[j]->symbol == '\0') {
 				int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
 				if (added && flag_verbose) {
+					if (!printed_string) {
+						printf("[]%s:\n", input);
+						printed_string = 1;
+					}
 					printf("\t%s > %s", state->name, trans->state->name);
 					if (trans->state->final) printf(" (F)"); //else printf("\n");
 					struct MultiStack *mstmp = MultiStack_get(current_stacks, trans->state);
@@ -903,6 +953,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 			}
 		}
 	}
+	if (delay && current_states->len > 1) nsleep(delay);
 	
 	// Iterate through each input char
 	for (int i = 0; input[i] != '\0'; i++) {
@@ -952,6 +1003,8 @@ int Automaton_run(struct Automaton *automaton, char *input)
 				}
 			}
 		}
+		
+		if (delay) nsleep(delay);
 		
 		Automaton_clear(current_states);
 		MultiStackList_destroy(current_stacks);

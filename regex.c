@@ -516,7 +516,7 @@ struct Automaton *automaton_dup(struct Automaton *automaton)
 		struct State *new_state = new_auto->states[i];
 		for (int j = 0; j < old_state->num_trans; j++) {
 			char *name_to = old_state->trans[j]->state->name;
-			struct State *new_to = get_state(new_auto, name_to);
+			struct State *new_to = State_get(new_auto, name_to);
 			struct Transition *new_trans = Transition_create(old_state->trans[j]->symbol, new_to, '\0', '\0');
 			Transition_add(new_state, new_trans);
 		}
