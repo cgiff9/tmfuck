@@ -4,6 +4,7 @@
 struct Stack {
 	int len;
 	int max_len;
+	int pos;
 	char *stack;
 };
 
@@ -22,6 +23,7 @@ struct MultiStackList {
 
 struct Stack *Stack_create();
 void Stack_push(struct Stack *stack, char symbol);
+void Stack_change_pos(struct Stack *stack, char direction);
 char Stack_pop(struct Stack *stack);
 char Stack_peek(struct Stack *stack);
 struct Stack *Stack_copy(struct Stack *stack);
@@ -31,6 +33,7 @@ struct MultiStackList *MultiStackList_create();
 void Stack_destroy(struct Stack *stack);
 void MultiStack_destroy(struct MultiStack *ms0);
 void MultiStackList_destroy(struct MultiStackList *msl0);
+void Stack_print(struct Stack *stack);
 void MultiStack_print(struct MultiStack *ms0);
 void MultiStackList_print(struct MultiStackList *msl0);
 

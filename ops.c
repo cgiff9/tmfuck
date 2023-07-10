@@ -298,7 +298,7 @@ struct Automaton *DFA_minimize(struct Automaton *a0)
 		struct State *stmp = atmp->states[0];
 		for (int j = 0; j < stmp->num_trans; j++) {
 			int trans_index = State_group_index(al1, stmp->trans[j]->state);
-			struct Transition *new_trans = Transition_create(stmp->trans[j]->symbol, min->states[trans_index], '\0', '\0');
+			struct Transition *new_trans = Transition_create(stmp->trans[j]->symbol, min->states[trans_index], '\0', '\0', '\0');
 			Transition_add(min->states[i], new_trans);
 		}
 		
@@ -374,7 +374,7 @@ struct Automaton *nfa_to_dfa(struct Automaton *automaton)
 				snprintf(name,STATE_NAME_MAX, "q%d", a0->len);
 				State_name_add(a0, name);
 			}
-			struct Transition *new_trans = Transition_create(symbol, a0->states[trans_index], '\0', '\0');
+			struct Transition *new_trans = Transition_create(symbol, a0->states[trans_index], '\0', '\0', '\0');
 			Transition_add(a0->states[i], new_trans);
 		}
 		// Set final states

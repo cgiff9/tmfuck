@@ -85,6 +85,7 @@ int main(int argc, char **argv)
 	// 0 for NFA
 	// 1 for DFA
 	// 2 for PDA
+	// 3 for TM
 	int machine_code = isDFA(a0);
 	
 	if (deterministic) {
@@ -132,9 +133,12 @@ int main(int argc, char **argv)
 			if (machine_code == 1) {
 				if (flag_verbose) Automaton_print(a0);
 				DFA_run(a0, input_string);
-			} else { 
+			} else if (machine_code != 3) { 
 				if (flag_verbose) Automaton_print(a0);
 				Automaton_run(a0, input_string);
+			} else {
+				if (flag_verbose) Automaton_print(a0);
+				TuringMachine_run(a0, input_string);
 			}
 		} else {
 			if (flag_verbose) Automaton_print(a0);
@@ -144,11 +148,15 @@ int main(int argc, char **argv)
 		if (machine_code == 1) {
 			if (flag_verbose) Automaton_print(a0);
 			DFA_run(a0, input_string);
-		} else {
+		} else if (machine_code != 3) {
 			if (flag_verbose) Automaton_print(a0);
 			Automaton_run(a0, input_string);
+		} else {
+			if (flag_verbose) Automaton_print(a0);
+			TuringMachine_run(a0, input_string);
 		}
 	}
 
+	//TuringMachine_run(a0,input_string);
 	Automaton_destroy(a0);
 }

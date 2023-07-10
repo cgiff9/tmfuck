@@ -275,7 +275,7 @@ struct Automaton *Automaton_concat(struct Automaton *a0, struct Automaton *a1)
 	new_auto->start = a0->start;
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			struct Transition *new_trans = Transition_create('\0', a1->start, '\0', '\0');
+			struct Transition *new_trans = Transition_create('\0', a1->start, '\0', '\0', '\0');
 			a0->states[i]->final = 0;
 			Transition_add(a0->states[i], new_trans);
 		}
@@ -307,8 +307,8 @@ struct Automaton *Automaton_union(struct Automaton *a0, struct Automaton *a1)
 	struct Automaton *new_auto = Automaton_create();
 
 	struct State *new_start = State_create("q0");
-	struct Transition *new_trans0 = Transition_create('\0', a0->start, '\0', '\0');
-	struct Transition *new_trans1 = Transition_create('\0', a1->start, '\0', '\0');
+	struct Transition *new_trans0 = Transition_create('\0', a0->start, '\0', '\0', '\0');
+	struct Transition *new_trans1 = Transition_create('\0', a1->start, '\0', '\0', '\0');
 	Transition_add(new_start, new_trans0);
 	Transition_add(new_start, new_trans1);
 	new_start->start = 1;
@@ -346,14 +346,14 @@ struct Automaton *Automaton_star(struct Automaton *a0)
 	new_start->start = 1;
 	new_start->final = 1;
 	
-	struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0');
+	struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0', '\0');
 	Transition_add(new_start, new_trans);
 	State_add(new_auto, new_start);
 	new_auto->start = new_start;
 
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			new_trans = Transition_create('\0', a0->start, '\0', '\0');
+			new_trans = Transition_create('\0', a0->start, '\0', '\0', '\0');
 			Transition_add(a0->states[i], new_trans);
 		}
 		if (a0->states[i]->start) a0->states[i]->start = 0;
@@ -375,7 +375,7 @@ struct Automaton *Automaton_plus(struct Automaton *a0)
 	new_auto->start = a0->start;
 	for (int i = 0; i < a0->len; i++) {
 		if (a0->states[i]->final) {
-			struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0');
+			struct Transition *new_trans = Transition_create('\0', a0->start, '\0', '\0', '\0');
 			Transition_add(a0->states[i], new_trans);
 		}
 		State_add(new_auto, a0->states[i]);
@@ -394,7 +394,7 @@ struct Automaton *Automaton_char(char symbol)
 	
 	q0->start = 1;
 	q1->final = 1;
-	struct Transition *trans = Transition_create(symbol, q1, '\0', '\0');
+	struct Transition *trans = Transition_create(symbol, q1, '\0', '\0', '\0');
 	Transition_add(q0, trans);
 	
 	State_add(a0, q0);
@@ -496,30 +496,4 @@ struct Automaton *regex_to_nfa(char *regex)
 	AutoStack_destroy(stack);
 	free(regex_infix);
 	return a0;
-}
-
-struct Automaton *automaton_dup(struct Automaton *automaton)
-{
-	struct Automaton *new_auto = Automaton_create();
-	for (int i = 0; i < automaton->len; i++) {
-		struct State *old_state = automaton->states[i];
-		struct State *new_state = State_create(old_state->name);
-		new_state->final = old_state->final;
-		if (old_state->start) {
-			new_state->start = 1;
-			new_auto->start = new_state;
-		}
-		State_add(new_auto, new_state);
-	}
-	for (int i = 0; i < automaton->len; i++) {
-		struct State *old_state = automaton->states[i];
-		struct State *new_state = new_auto->states[i];
-		for (int j = 0; j < old_state->num_trans; j++) {
-			char *name_to = old_state->trans[j]->state->name;
-			struct State *new_to = State_get(new_auto, name_to);
-			struct Transition *new_trans = Transition_create(old_state->trans[j]->symbol, new_to, '\0', '\0');
-			Transition_add(new_state, new_trans);
-		}
-	}
-	return new_auto;
 }

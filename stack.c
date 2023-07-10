@@ -13,6 +13,7 @@ struct Stack *Stack_create()
 	}
 	stack->len = 0;
 	stack->max_len = 2;
+	stack->pos = 0;
 	stack->stack = malloc(sizeof(char ) * (stack->max_len+1)); // Allow null terminator
 	if (stack->stack == NULL) {
 		fprintf(stderr, "Error allocating memory for string in Stack struct\n");
@@ -38,6 +39,37 @@ void Stack_push(struct Stack *stack, char symbol)
 	stack->stack[stack->len] = '\0';
 }
 
+void Stack_write(struct Stack *stack, char symbol)
+{
+	//if (stack->
+}
+
+void Stack_change_pos(struct Stack *stack, char direction)
+{
+	if (direction == 'L') {
+		if (stack->pos > 0) { 
+			stack->pos--;
+		} else {
+			//stack->max_len *= 2;
+			stack->stack = realloc(stack->stack, sizeof(char) * stack->max_len  * 2 + 1);
+			if (stack->stack == NULL) {
+				fprintf(stderr, "Error reallocating memory for the left end of stack\n");
+				exit(EXIT_FAILURE);
+			}
+			memmove(stack->stack+stack->max_len, stack->stack, stack->max_len+1);
+			memset(stack->stack, '_', stack->max_len);
+			stack->len = stack->len + stack->max_len;
+			stack->pos = stack->max_len-1;
+			stack->max_len *= 2;
+			
+		}
+	} else if (direction == 'R') {
+		stack->pos++;
+		if (stack->pos == stack->len)
+			Stack_push(stack, '_');
+	}
+}
+
 char Stack_pop(struct Stack *stack)
 {
 	if (stack->len == 0) return '\0';
@@ -56,6 +88,7 @@ char Stack_peek(struct Stack *stack)
 struct Stack *Stack_copy(struct Stack *stack)
 {
 	struct Stack *new_stack = Stack_create();
+	new_stack->pos = stack->pos;
 	new_stack->len = stack->len;
 	new_stack->max_len = stack->max_len;
 	new_stack->stack = realloc(new_stack->stack, sizeof (char) * (new_stack->max_len+1));
@@ -145,11 +178,24 @@ void MultiStackList_destroy(struct MultiStackList *msl0)
 	free(msl0);
 }
 
+void Stack_print(struct Stack *stack)
+{
+	for (int i = 0; i < stack->len; i++) {
+		if (i == stack->pos) {
+			printf("[%c]", stack->stack[i]);
+		} else if (stack->stack[i] == '_') {
+			if (i > 0 && i <stack->len-1)
+				putchar('_');
+			
+		} else putchar(stack->stack[i]);	
+	}
+}
+
 void MultiStack_print(struct MultiStack *ms0)
 {
 	printf("%s: ", ms0->state->name);
 	for (int i = 0; i < ms0->len; i++) {
-		printf("%s ", ms0->stacks[i]->stack);
+		Stack_print(ms0->stacks[i]);
 	}
 	printf("\n");
 }

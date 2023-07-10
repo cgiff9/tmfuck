@@ -19,12 +19,14 @@ struct Transition {
 	struct State *state;
 	char readsym;
 	char writesym;
+	char direction;
 };
 
 struct State {
 	char *name;
 	int start;
 	int final;
+	int reject;
 	struct Transition **trans;
 	int num_trans;
 	int max_trans;
@@ -35,7 +37,7 @@ struct Automaton *Automaton_create();
 struct State* State_get(struct Automaton *automaton, char *name);
 void State_name_add(struct Automaton *automaton, char *name);
 void State_add(struct Automaton *automaton, struct State *state);
-struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym);
+struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym, char direction);
 void Transition_add(struct State *state, struct Transition *trans);
 void State_destroy(struct State *state);
 void Automaton_destroy(struct Automaton *automaton);
@@ -48,6 +50,7 @@ int isDFA(struct Automaton *automaton);
 int DFA_run(struct Automaton *automaton, char *input);
 //int Machine_advance(struct MultiStackList *source, struct MultiStackList *target, struct Automaton *automaton, struct State *state, struct Transition *trans);
 int Automaton_run(struct Automaton *automaton, char *input);
+int TuringMachine_run(struct Automaton *automaton, char *input);
 void Automaton_run_file(struct Automaton *automaton, char *input_string_file);
 
 #endif // AUTO_H_

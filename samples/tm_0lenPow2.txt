@@ -1,0 +1,27 @@
+# checks whether the number of zeroes
+# is a power of 2
+start: q1;
+final: q7;
+reject: q6;
+q1:
+	_>q6 (R);
+	x>q6 (R);
+	0>q2 (>_, R);
+q2:
+	x>q2 (R);
+	0>q3 (>x,R);
+	_>q7 (R);
+q3:
+	x>q3 (R);
+	0>q4 (R);
+	_>q5 (L);
+q4:
+	x>q4 (R);
+	0>q3 (>x,R);
+	_>q6 (R);
+q5:
+	0>q5 (L);
+	x>q5 (L);
+	_>q2 (R);
+q6:
+q7:

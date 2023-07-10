@@ -1,7 +1,12 @@
 # OTTO
 
-A tool for building DFAs, NFAs,
-and PDAs.
+A tool for building automata
+- [x] Determinstic Finite Automata (DFA)
+- [x] Nondeterministic Finite Automata (NFA)
+- [x] Pushdown Automata (PDA)
+- [x] Deterministic Pushdown Automata (DPDA)
+- [x] Turing Machines
+- [x] Nondeterministic Turing Machines
 
 ## Building
 ```
@@ -101,6 +106,38 @@ the transition, stack operations can be defined.
 ```
 These stack characters can also be specified within
 single quotes.
+
+## Turing Machines
+The file format also supports building Turing Machines.
+Upon  transitioning to another state, the machine may 
+write to the input string ("tape") and *may* change
+direction if specified. Reject states are supported 
+but not necessarily required. Keep in mind a machine
+will run forever if designed to do so (CTRL+C may be
+your friend). The following example will take a binary
+string and increment it by one:
+```
+start: q0;
+final: q2;
+q0:
+    0>q0 (R);
+    1>q0 (R);
+    _>q1 (L);
+q1:
+    1>q1 (>0,L);
+    0>q2 (>1,L);
+    _>q2 (>1,L);
+q2:
+```
+The blank symbol is designated as underscore '_'. Both
+the left and right ends are filled with "infinite" blanks.
+The sleep option '-s' may be useful in seeing how the tape
+progresses as the Turing Machine computes. For instance,
+the following run will sleep 250 milliseconds between
+each verbose output step:
+```
+$ ./otto samples/tm_0lenPow2.txt 00000000 -s 0.25
+```
 
 ## Regex
 Using the '-r' argument, a regex string may be supplied

@@ -44,5 +44,4 @@ void AutoStack_push(struct AutoStack *stack, struct Automaton *a0);
 struct Automaton *AutoStack_pop(struct AutoStack *stack);
 void AutoStack_destroy(struct AutoStack *stack);
 struct Automaton *regex_to_nfa(char *regex);
-struct Automaton *automaton_dup(struct Automaton *automaton);
 #endif // REGEX_H_
