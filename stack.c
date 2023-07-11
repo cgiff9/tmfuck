@@ -180,11 +180,17 @@ void MultiStackList_destroy(struct MultiStackList *msl0)
 
 void Stack_print(struct Stack *stack)
 {
+	int leading_pos = 0;
+	for (int i = 0; i < stack->len; i++) {
+		if (stack->stack[i] == '_') leading_pos++;
+		else break;
+	}
+	
 	for (int i = 0; i < stack->len; i++) {
 		if (i == stack->pos) {
 			printf("[%c]", stack->stack[i]);
 		} else if (stack->stack[i] == '_') {
-			if (i > 0 && i <stack->len-1)
+			if (i > leading_pos && i <stack->len-1)
 				putchar('_');
 			
 		} else putchar(stack->stack[i]);	
