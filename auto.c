@@ -1263,8 +1263,8 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 			for (int j = 0; j < state->num_trans; j++) {
 				struct Transition *trans = state->trans[j];
 				struct MultiStack *mstmp = MultiStack_get(current_stacks, state);
+				int state_added = 0;
 				if (mstmp != NULL) {
-					int state_added = 0;
 					for (int k = 0; k < mstmp->len; k++) {
 						struct Stack *stacktmp = mstmp->stacks[k];
 						if (trans->symbol == stacktmp->stack[stacktmp->pos]) {
@@ -1277,23 +1277,22 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 								copy->stack[copy->pos] = trans->writesym;
 							Stack_change_pos(copy, trans->direction);
 							Stack_add_to(next_stacks, trans->state, copy);
-							
-							if (flag_verbose) {
-								printf("\t%s > %s", state->name, trans->state->name);
-								if (trans->state->final) printf(" [F]");
-								if (trans->state->reject) printf(" [R]");
-								struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
-								if (printmp) {
-									for (int k = 0; k < printmp->len; k++) {
-										//printf(" %s", mstmp->stacks[k]->stack);
-										putchar(' ');
-										Stack_print(printmp->stacks[k]);
-									}
-								}
-								printf("\n");
-							}
 						}
 					}
+				}
+				if (state_added && flag_verbose) {
+					printf("\t%s > %s", state->name, trans->state->name);
+					if (trans->state->final) printf(" [F]");
+					if (trans->state->reject) printf(" [R]");
+					struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
+					if (printmp) {
+						for (int k = 0; k < printmp->len; k++) {
+							//printf(" %s", mstmp->stacks[k]->stack);
+							putchar(' ');
+							Stack_print(printmp->stacks[k]);
+						}
+					}
+					printf("\n");
 				}
 				
 			}
@@ -1304,7 +1303,7 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 			for (int j = 0; j < state->num_trans; j++) {
 				struct Transition *trans = state->trans[j];
 				if (trans->symbol == '\0') {
-					struct MultiStack *mstmp = MultiStack_get(current_stacks, state);
+					struct MultiStack *mstmp = MultiStack_get(next_stacks, state);
 					if (mstmp != NULL) {
 						for (int k = 0; k < mstmp->len; k++) {
 							struct Stack *copy = Stack_copy(mstmp->stacks[k]);

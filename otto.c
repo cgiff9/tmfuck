@@ -157,6 +157,5 @@ int main(int argc, char **argv)
 		}
 	}
 
-	//TuringMachine_run(a0,input_string);
 	Automaton_destroy(a0);
 }
