@@ -120,8 +120,18 @@ struct MultiStack *MultiStack_create(struct State *state)
 	return ms0;
 }
 
+int Stack_equiv(struct Stack *st0, struct Stack *st1)
+{
+	if (strcmp(st0->stack, st1->stack) == 0 && st0->pos == st1->pos) {
+		return 1;
+	} else return 0;
+}
+
 void Stack_add(struct MultiStack *ms0, struct Stack *stack)
 {
+	for (int i = 0; i < ms0->len; i++) {
+		if (Stack_equiv(ms0->stacks[i], stack)) return;
+	}
 	ms0->len++;
 	if (ms0->len > ms0->max_len) {
 		ms0->max_len *= 2;
@@ -180,20 +190,22 @@ void MultiStackList_destroy(struct MultiStackList *msl0)
 
 void Stack_print(struct Stack *stack)
 {
+	// does not print leading or trailing blanks
 	int leading_pos = 0;
-	for (int i = 0; i < stack->len; i++) {
+	int trailing_pos = stack->len- 1;
+	for (int i = 0; i < stack->len && i < stack->pos; i++) {
 		if (stack->stack[i] == '_') leading_pos++;
 		else break;
 	}
-	
-	for (int i = 0; i < stack->len; i++) {
-		if (i == stack->pos) {
+	for (int i = stack->len-1; i > -1 && i > stack->pos; i--) {
+		if (stack->stack[i] == '_') trailing_pos--;
+		else break;
+	}
+	for (int i = leading_pos; i <= trailing_pos; i++) {
+		if (i == stack->pos)
 			printf("[%c]", stack->stack[i]);
-		} else if (stack->stack[i] == '_') {
-			if (i > leading_pos && i <stack->len-1)
-				putchar('_');
-			
-		} else putchar(stack->stack[i]);	
+		else
+			putchar(stack->stack[i]);
 	}
 }
 

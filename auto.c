@@ -77,10 +77,10 @@ void State_name_add(struct Automaton *automaton, char *name)
 	}
 }
 
-void State_add(struct Automaton *automaton, struct State *state)
+int State_add(struct Automaton *automaton, struct State *state)
 {
 	for (int i = 0; i < automaton->len; i++) {
-		if (automaton->states[i] == state) return;
+		if (automaton->states[i] == state) return 0;
 	}
 	automaton->len++;
 	if (automaton->len > automaton->max_len) {
@@ -92,6 +92,7 @@ void State_add(struct Automaton *automaton, struct State *state)
 		}
 	}
 	automaton->states[automaton->len-1] = state;
+	return 1;
 }
 
 struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym, char direction)
@@ -1073,10 +1074,12 @@ int Machine_advance(struct MultiStackList *source, struct MultiStackList *target
 						State_add(automaton, trans->state);
 						state_added = 1;
 					}
+					
 					struct Stack *copy = Stack_copy(mstmp->stacks[l]);
 					Stack_pop(copy);
 					if (trans->writesym != '\0') Stack_push(copy, trans->writesym);
 					Stack_add_to(target, trans->state, copy);
+					
 				}
 			}
 			return state_added;
@@ -1094,30 +1097,31 @@ int Automaton_run(struct Automaton *automaton, char *input)
 	// Add empty string transitions to current array
 	State_add(current_states, automaton->start);
 	int printed_string = 0;
-	for (int i = 0; i < current_states->len; i++) {
-		struct State *state = current_states->states[i];
-		for (int j = 0; j < state->num_trans; j++) {
-			struct Transition *trans = state->trans[j];
-			if (state->trans[j]->symbol == '\0') {
-				int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
-				if (added && flag_verbose) {
-					if (!printed_string) {
-						printf("[]%s:\n", input);
-						printed_string = 1;
+	if (input[0] == '\0') {
+		for (int i = 0; i < current_states->len; i++) {
+			struct State *state = current_states->states[i];
+			for (int j = 0; j < state->num_trans; j++) {
+				struct Transition *trans = state->trans[j];
+				if (state->trans[j]->symbol == '\0') {
+					int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
+					if (added && flag_verbose) {
+						if (!printed_string) {
+							printf("[]%s:\n", input);
+							printed_string = 1;
+						}
+						printf("\t%s > %s", state->name, trans->state->name);
+						if (trans->state->final) printf(" [F]"); //else printf("\n");
+						struct MultiStack *mstmp = MultiStack_get(current_stacks, trans->state);
+						if (mstmp) {
+							for (int k = 0; k < mstmp->len; k++)
+								printf(" %s", mstmp->stacks[k]->stack);
+						}
+						printf("\n");
 					}
-					printf("\t%s > %s", state->name, trans->state->name);
-					if (trans->state->final) printf(" [F]"); //else printf("\n");
-					struct MultiStack *mstmp = MultiStack_get(current_stacks, trans->state);
-					if (mstmp) {
-						for (int k = 0; k < mstmp->len; k++)
-							printf(" %s", mstmp->stacks[k]->stack);
-					}
-					printf("\n");
 				}
 			}
 		}
 	}
-	if (delay && current_states->len > 1) nsleep(delay);
 	
 	// Iterate through each input char
 	for (int i = 0; input[i] != '\0'; i++) {
@@ -1131,6 +1135,10 @@ int Automaton_run(struct Automaton *automaton, char *input)
 			struct State *state = current_states->states[j];
 			for (int k = 0; k < state->num_trans; k++) {
 				struct Transition *trans = state->trans[k];
+				
+				if (trans->symbol == '\0') {
+					int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
+				}
 				
 				// Input char match 
 				if (trans->symbol == input[i]) {
@@ -1166,7 +1174,6 @@ int Automaton_run(struct Automaton *automaton, char *input)
 						}
 						printf("\n");
 					}
-					
 				}
 			}
 		}
@@ -1217,41 +1224,6 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 	Stack_add(start_ms, start_stack);
 	MultiStack_add(current_stacks, start_ms);
 	
-	for (int i = 0; i < current_states->len; i++) {
-		struct State *state = current_states->states[i];
-		for (int j = 0; j < state->num_trans; j++) {
-			struct Transition *trans = state->trans[j];
-			if (trans->symbol == '\0') {
-				struct MultiStack *mstmp = MultiStack_get(current_stacks, state);
-				if (mstmp != NULL) {
-					for (int k = 0; k < mstmp->len; k++) {
-						struct Stack *copy = Stack_copy(mstmp->stacks[k]);
-						if (trans->writesym != '\0')
-							copy->stack[copy->pos] = trans->writesym;
-						Stack_change_pos(copy, trans->direction);
-						Stack_add_to(current_stacks, trans->state, copy);
-					}
-				}
-				State_add(current_states, trans->state);
-				
-				if (flag_verbose) {
-					printf("\t%s > %s", state->name, trans->state->name);
-					if (trans->state->final) printf(" [F]");
-					if (trans->state->reject) printf(" [R]");
-					struct MultiStack *printmp = MultiStack_get(current_stacks, trans->state);
-					if (printmp) {
-						for (int k = 0; k < printmp->len; k++) {
-							//printf(" %s", mstmp->stacks[k]->stack);
-							putchar(' ');
-							Stack_print(printmp->stacks[k]);
-						}
-					}
-					printf("\n");
-				}
-			}
-		}
-	}
-	
 	while(1) {
 		if (flag_verbose) printf("---------------\n");
 		
@@ -1263,8 +1235,20 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 			for (int j = 0; j < state->num_trans; j++) {
 				struct Transition *trans = state->trans[j];
 				struct MultiStack *mstmp = MultiStack_get(current_stacks, state);
+				
 				int state_added = 0;
-				if (mstmp != NULL) {
+				if (trans->symbol == '\0') {
+					State_add(next_states, trans->state);
+					if (mstmp != NULL) {
+						for (int k = 0; k < mstmp->len; k++) {
+							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
+							if (trans->writesym != '\0')
+								copy->stack[copy->pos] = trans->writesym;
+							Stack_change_pos(copy, trans->direction);
+							Stack_add_to(next_stacks, trans->state, copy);
+						}
+					}
+				} else if (mstmp != NULL) {
 					for (int k = 0; k < mstmp->len; k++) {
 						struct Stack *stacktmp = mstmp->stacks[k];
 						if (trans->symbol == stacktmp->stack[stacktmp->pos]) {
@@ -1304,7 +1288,8 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 				struct Transition *trans = state->trans[j];
 				if (trans->symbol == '\0') {
 					struct MultiStack *mstmp = MultiStack_get(next_stacks, state);
-					if (mstmp != NULL) {
+					int added = State_add(next_states, trans->state);
+					if (added && mstmp != NULL) {
 						for (int k = 0; k < mstmp->len; k++) {
 							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
 							if (trans->writesym != '\0')
@@ -1313,7 +1298,7 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 							Stack_add_to(next_stacks, trans->state, copy);
 						}
 					}
-					State_add(next_states, trans->state);
+					
 					if (flag_verbose) {
 						printf("\t%s > %s", state->name, trans->state->name);
 						if (trans->state->final) printf(" [F]");
