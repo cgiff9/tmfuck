@@ -34,7 +34,7 @@ $ ./otto samples/dfa_divBy8.txt 1000
 =>1000
 	ACCEPTED
 ```
-A DFA, NFA, or PDA can be supplied via the first
+A DFA, NFA, PDA, or TM file can be supplied via the first
 "non-option" argument. The input string is
 supplied via the second "non-option" argument.
 
