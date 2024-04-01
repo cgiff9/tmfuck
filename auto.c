@@ -9,6 +9,7 @@
 
 int flag_verbose = 0;
 double delay = 0;
+char tm_blank = '_';
 
 struct State *State_create(char *name)
 {
@@ -279,6 +280,7 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == '#' || line[i] == '\n') {
 							mystate = 7;	
 						} else if (isspace(line[i])) {
+							j = i + 1;
 							mystate = 11;
 						} else mystate = 8;
 						break;;
@@ -289,7 +291,6 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == ':') {
 							*name = '\0';
 							strncat(name, line+j, i-j);
-							
 							if (!strcmp(name, "start")) {
 								j = i + 1;
 								mystate = 20;
@@ -299,6 +300,9 @@ struct Automaton *Automaton_import(char *filename)
 							} else if (!strcmp(name, "reject")) {
 								j = i + 1;
 								mystate = 22;
+							} else if (!strcmp(name, "blank")) {
+								j = i + 1;
+								mystate = 23;	
 							} else {
 								State_name_add(automaton, name);
 								mystate = 3;
@@ -323,6 +327,7 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == '\'') {
 							mystate = 9;
 						} else if (isspace(line[i])) {
+							j = i + 1;
 							mystate = 13;
 						}
 						break;;
@@ -336,7 +341,6 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == ':') {
 							*name = '\0';
 							strncat(name, line+j, i-j);
-							
 							if (!strcmp(name, "start")) {
 								j = i + 1;
 								mystate = 20;
@@ -346,6 +350,9 @@ struct Automaton *Automaton_import(char *filename)
 							} else if (!strcmp(name, "reject")) {
 								j = i + 1;
 								mystate = 22;
+								} else if (!strcmp(name, "blank")) {
+								j = i + 1;
+								mystate = 23;	
 							} else {
 								State_name_add(automaton, name);
 								mystate = 3;
@@ -408,7 +415,9 @@ struct Automaton *Automaton_import(char *filename)
 						break;
 					// Error
 					case 8:
-						fprintf(stderr,"Error on line %d\n", linenum);
+						char *line_debug = line;
+						while(isspace((unsigned char)*line_debug)) line_debug++;
+						fprintf(stderr,"Error on line %d: %s", linenum, line_debug);
 						free(line);
 						fclose(fp);
 						Automaton_destroy(automaton);
@@ -427,9 +436,10 @@ struct Automaton *Automaton_import(char *filename)
 						break;
 					// space case for state 1
 					case 11:
-						if (isspace(line[i]))
+						if (isspace(line[i])) {
+							j = i + 1;
 							mystate = 11;
-						else if (isnamechar(line[i])) {
+						} else if (isnamechar(line[i])) {
 							j = i;
 							mystate = 2;
 						} else if (line[i] == '#' || line[i] == '\n')
@@ -453,6 +463,9 @@ struct Automaton *Automaton_import(char *filename)
 							} else if (!strcmp(name, "reject")) {
 								j = i + 1;
 								mystate = 22;
+							} else if (!strcmp(name, "blank")) {
+								j = i + 1;
+								mystate = 23;	
 							} else {
 								State_name_add(automaton, name);
 								mystate = 3;
@@ -464,9 +477,10 @@ struct Automaton *Automaton_import(char *filename)
 					// space case for state 3
 					case 13:
 						spaces++;
-						if (isspace(line[i]))
+						if (isspace(line[i])) {
+							j = i + 1;
 							mystate = 13;
-						else if (line[i] == '\'') {
+						} else if (line[i] == '\'') {
 							spaces = 0;
 							mystate = 9;
 						} else if (isnamechar(line[i])) {
@@ -505,6 +519,9 @@ struct Automaton *Automaton_import(char *filename)
 							} else if (!strcmp(name, "reject")) {
 								j = i + 1;
 								mystate = 22;
+							} else if (!strcmp(name, "blank")) {
+								j = i + 1;
+								mystate = 23;								
 							} else {
 								State_name_add(automaton, name);
 								mystate = 3;
@@ -592,6 +609,43 @@ struct Automaton *Automaton_import(char *filename)
 							remove_spaces(reject);
 							mystate = 3;
 						} else mystate = 22;
+						break;
+					// 23-27: line represents the custom blank character for tms
+					case 23:
+						if (isspace(line[i])) {
+							mystate = 23;
+						} else if (line[i] == '\'') { 
+							mystate = 24;
+						} else if (line[i] == ';') {
+							tm_blank = ' ';
+							mystate = 3;
+						} else { 
+							tm_blank = line[i];
+							mystate = 27;
+						}
+						break;
+					case 24:
+						tm_blank = line[i];
+						mystate = 25;
+						break;
+					case 25:
+						if (line[i] == '\'') {
+							mystate = 26;
+						} else mystate = 8;
+						break;
+					case 26:
+						if (isspace(line[i])) {
+							mystate = 26;
+						} else if (line[i] == ';') {
+							mystate = 3;
+						} else mystate = 8;
+						break;
+					case 27:
+						if (isspace(line[i])) {
+							mystate = 27;
+						} else if (line[i] == ';') {
+							mystate = 3;
+						} else mystate = 8;
 						break;
 					// BEGIN PDA EXTENSION
 					// empty 'read' char
@@ -867,7 +921,9 @@ struct Automaton *Automaton_import(char *filename)
 			}
 			
 			if (mystate != 3 && mystate !=13) { //&& mystate != 20 && mystate != 21 && mystate != 7) {
-				fprintf(stderr, "Error on line %d\n", linenum);
+				char *line_debug = line;
+				while(isspace((unsigned char)*line_debug)) line_debug++;
+				fprintf(stderr, "Error on line %d: %s", linenum, line_debug);
 				free(line);
 				fclose(fp);
 				Automaton_destroy(automaton);

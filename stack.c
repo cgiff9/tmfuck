@@ -57,7 +57,7 @@ void Stack_change_pos(struct Stack *stack, char direction)
 				exit(EXIT_FAILURE);
 			}
 			memmove(stack->stack+stack->max_len, stack->stack, stack->max_len+1);
-			memset(stack->stack, '_', stack->max_len);
+			memset(stack->stack, tm_blank, stack->max_len);
 			stack->len = stack->len + stack->max_len;
 			stack->pos = stack->max_len-1;
 			stack->max_len *= 2;
@@ -66,7 +66,7 @@ void Stack_change_pos(struct Stack *stack, char direction)
 	} else if (direction == 'R') {
 		stack->pos++;
 		if (stack->pos == stack->len)
-			Stack_push(stack, '_');
+			Stack_push(stack, tm_blank);
 	}
 }
 
@@ -194,11 +194,11 @@ void Stack_print(struct Stack *stack)
 	int leading_pos = 0;
 	int trailing_pos = stack->len- 1;
 	for (int i = 0; i < stack->len && i < stack->pos; i++) {
-		if (stack->stack[i] == '_') leading_pos++;
+		if (stack->stack[i] == tm_blank) leading_pos++;
 		else break;
 	}
 	for (int i = stack->len-1; i > -1 && i > stack->pos; i--) {
-		if (stack->stack[i] == '_') trailing_pos--;
+		if (stack->stack[i] == tm_blank) trailing_pos--;
 		else break;
 	}
 	for (int i = leading_pos; i <= trailing_pos; i++) {

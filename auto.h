@@ -5,6 +5,7 @@
 
 extern int flag_verbose;
 extern double delay;
+extern char tm_blank;
 
 struct Automaton {
 	int max_len;

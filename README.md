@@ -119,20 +119,27 @@ string and increment it by one:
 ```
 start: q0;
 final: q2;
+blank: @;
 q0:
     0>q0 (R);
     1>q0 (R);
-    _>q1 (L);
+    @>q1 (L);
 q1:
     1>q1 (>0,L);
     0>q2 (>1,L);
-    _>q2 (>1,L);
+    @>q2 (>1,L);
 q2:
 ```
-The blank symbol is designated as underscore '_'. Both
-the left and right ends are filled with "infinite" blanks.
-The sleep option '-s' may be useful in seeing how the tape
-progresses as the Turing Machine computes. For instance,
+The default blank symbol is the underscore '\_', but this can
+be changed by using the "blank: [char]" directive. When in
+doubt, this blank character can be specified between single quotes.
+In this implementation, both the left and right ends are considered 
+to be filled with "infinite" blanks. The "reject:" directive can 
+be optionally used to specify rejecting states.
+<br />
+<br />
+The sleep command-line option '-s' may be useful in seeing how the
+tape progresses as the Turing Machine computes. For instance,
 the following run will sleep 250 milliseconds between
 each verbose output step:
 ```
