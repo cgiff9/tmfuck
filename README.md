@@ -62,7 +62,7 @@ list of state names:
 ```
 q0: 'a'>q0,q1;
 ```
-For NFAs and PDAs, an empty string (epsilon) transition
+For nondeterministic automata, an empty string (epsilon) transition
 can be supplied by typing '>' with no preceding character:
 ```
 q1: >q0,q2; a>q0;
