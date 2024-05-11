@@ -8,9 +8,8 @@ A simple interpreted language for building Turing machines and other automata
 - [x] Turing machines
 - [x] Nondeterministic Turing machines
 
-<br />
-While the name of this language is inspired by the venerable migrane-inducing
-language [brainfuck](https://esolangs.org/wiki/Brainfuck), it is the main goal of this project to 
+While the name of this language is inspired by the venerable migrane-inducing 
+[brainfuck](https://esolangs.org/wiki/Brainfuck), it is the main goal of this project to 
 make the textual design of Turing machines and other automata a more comprehensible excercise,
 especially for any struggling students out there.
 <br />
