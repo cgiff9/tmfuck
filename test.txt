@@ -1,8 +1,0 @@
-q1: a,_,c,d > q2;
-start		: q0  ;
-final : q3  ;
-	reject		: q4	,	q5 ;# fuck 
-blank: !;
-q0: a,b,c,d,_ > q1,q2 (L, >1);  
-q2: 'a',b,c,d, ';', ',' > q3;
-q3:	
