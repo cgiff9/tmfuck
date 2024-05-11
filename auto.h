@@ -46,6 +46,7 @@ void Automaton_clear(struct Automaton *automaton);
 void State_print(struct State *state);
 void Automaton_print(struct Automaton *automaton);
 int isnamechar(char c);
+static int State_compare(const void *a, const void *b);
 struct Automaton *Automaton_import(char *filename);
 int isDFA(struct Automaton *automaton);
 int DFA_run(struct Automaton *automaton, char *input);

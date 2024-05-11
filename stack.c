@@ -207,6 +207,7 @@ void Stack_print(struct Stack *stack)
 		else
 			putchar(stack->stack[i]);
 	}
+	//putchar('\n');
 }
 
 void MultiStack_print(struct MultiStack *ms0)
