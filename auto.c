@@ -271,6 +271,8 @@ struct Automaton *Automaton_import(char *filename)
 	char alphabet[100];
 	int linenum=1;
 	int linechar;
+	int start_exists = 0;
+	int final_exists = 0;
 
 	int mystate=1;
 	struct Automaton *automaton = Automaton_create();
@@ -657,9 +659,27 @@ struct Automaton *Automaton_import(char *filename)
 							if (!strcmp(name, "start")) {
 								automaton->start = new;
 								new->start=1;
+								start_exists = 1;
 							} else if (!strcmp(name, "final")) {
+								if (new->reject) {
+									printf("%s cannot be both a final and reject state\n", special);
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+								}
 								new->final=1;
+								final_exists = 1;
 							} else if (!strcmp(name, "reject")) {
+								if (new->final) {
+									printf("%s cannot be both a final and reject state\n", special);
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+								}
 								new->reject=1;
 							}
 							
@@ -681,9 +701,27 @@ struct Automaton *Automaton_import(char *filename)
 							if (!strcmp(name, "start")) {
 								automaton->start = new;
 								new->start=1;
+								start_exists = 1;
 							} else if (!strcmp(name, "final")) {
+								if (new->reject) {
+									printf("%s cannot be both a final and reject state\n", special);
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+								}
 								new->final=1;
+								final_exists = 1;
 							} else if (!strcmp(name, "reject")) {
+								if (new->final) {
+									printf("%s cannot be both a final and reject state\n", special);
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+								}
 								new->reject=1;
 							}
 							
@@ -1028,6 +1066,7 @@ struct Automaton *Automaton_import(char *filename)
 				free(line);
 				fclose(fp);
 				Automaton_destroy(automaton);
+				Stack_destroy(symstack);
 				exit(EXIT_FAILURE);
 			}
 			
@@ -1036,11 +1075,22 @@ struct Automaton *Automaton_import(char *filename)
 	}
 
 	free(line);
+	fclose(fp);
+
+	if (!start_exists || !final_exists) {
+		if (!start_exists) {
+			fprintf(stderr, "Please define a start state\n");
+		}
+		if (!final_exists) {
+			fprintf(stderr, "Please define at least one final state\n");
+		}
+		Automaton_destroy(automaton);
+		exit(EXIT_FAILURE);
+	}
 	
 	// Sort states in alpha order
 	qsort(automaton->states, automaton->len, sizeof(struct State *), State_compare);
 	
-	fclose(fp);
 	return automaton;
 }
 
