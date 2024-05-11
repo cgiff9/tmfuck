@@ -904,8 +904,13 @@ struct Automaton *Automaton_import(char *filename)
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
-							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-							Transition_add(from, new_trans);
+							for (int f = 0; f < symstack->len; f++) {
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+								Transition_add(from, new_trans);
+							}
+							//struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+							//Transition_add(from, new_trans);
 							
 							j = i + 1;
 							mystate = 5;
@@ -913,8 +918,15 @@ struct Automaton *Automaton_import(char *filename)
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
-							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-							Transition_add(from, new_trans);
+							for (int f = 0; f < symstack->len; f++) {
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+								Transition_add(from, new_trans);
+							}
+							Stack_destroy(symstack);
+							symstack = Stack_create(symstack);
+							//struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+							//Transition_add(from, new_trans);
 						
 							mystate = 3;
 						} else mystate = 8;
@@ -1017,8 +1029,15 @@ struct Automaton *Automaton_import(char *filename)
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
-							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-							Transition_add(from, new_trans);
+							for (int f = 0; f < symstack->len; f++) {
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+								Transition_add(from, new_trans);
+							}
+							//Stack_destroy(symstack);
+							//symstack = Stack_create(symstack);
+							//struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+							//Transition_add(from, new_trans);
 							
 							j = i + 1;
 							mystate = 5;
@@ -1026,8 +1045,15 @@ struct Automaton *Automaton_import(char *filename)
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
-							struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-							Transition_add(from, new_trans);
+							for (int f = 0; f < symstack->len; f++) {
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+								Transition_add(from, new_trans);
+							}
+							Stack_destroy(symstack);
+							symstack = Stack_create(symstack);
+							//struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
+							//Transition_add(from, new_trans);
 							
 							mystate = 3;
 						} else mystate = 8;
