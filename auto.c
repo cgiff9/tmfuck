@@ -423,7 +423,7 @@ struct Automaton *Automaton_import(char *filename)
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
 							for (int f = 0; f < symstack->len; f++) {
-								printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
 								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
 								Transition_add(from, new_trans);
 							}
@@ -442,7 +442,7 @@ struct Automaton *Automaton_import(char *filename)
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
 							for (int f = 0; f < symstack->len; f++) {
-								printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
 								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
 								Transition_add(from, new_trans);
 							}
@@ -672,7 +672,7 @@ struct Automaton *Automaton_import(char *filename)
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
 							for (int f = 0; f < symstack->len; f++) {
-								printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
 								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
 								Transition_add(from, new_trans);
 							}
@@ -691,7 +691,7 @@ struct Automaton *Automaton_import(char *filename)
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
 							for (int f = 0; f < symstack->len; f++) {
-								printf("%c: from %s to %s\n", symstack->stack[f], name, state);
+								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
 								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
 								Transition_add(from, new_trans);
 							}
