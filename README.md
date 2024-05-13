@@ -49,7 +49,7 @@ supplied via the second "non-option" argument.
 
 ## File Format
 ### Directives
-There are four directives that govern important aspects
+There are five directives that govern important aspects
 of the machine file:
 #### Syntax
 ```
@@ -70,8 +70,8 @@ blank:   + the character that "fills" the infinite end(s) of
            a Turing machine's tape. Default is '_'
 bound:   + indicates which end of a Turing machine's tape is
            not filled with infinite blanks. Default is
-		   empty (no character), meaning both tape ends are
-		   infinite.
+           empty (no character), meaning both tape ends are
+           infinite.
 ```
 For all types of automata, the "start: " and "final: " 
 directives are required. The "reject: ", "blank: ", and
@@ -83,7 +83,7 @@ Understand that these directives are considered special
 state names, so please avoid referring to these names 
 when defining transitions. The "final: " and "reject: " 
 directives can be used on multiple lines and will be 
-aggregated. If the "start: ", "blank: ", and "bound: "  
+aggregated. If the "start: ", "blank: ", and "bound: "
 directives are used on multiple lines, the lowest line 
 (and its last listed element) will be used.
 
@@ -228,7 +228,7 @@ given).
 ```
 bound: L, H;
 ```
-In the above, the tape extends infinitely to the right only. If the tape head tries to
+In this example, the tape also extends infinitely to the right only, but if the tape head tries to
 move left of the tape's beginning, the TM halts and rejects (for that branch). This 
 behavior is less common, but I read about it being used somewhere and thought it should be available.
 Bounding the right end of the tape with 'R' (and extending infinitely to the left) is also 
@@ -240,7 +240,7 @@ please note the "reject:" directive is also optional for Turing machines, althou
 employed in the wild. In this program multiple reject states can be listed. I'm not sure why you'd ever 
 need more than one reject state, but again, who am I to judge? ;)
 
-### Sleep
+## Sleep
 The sleep command-line option '-s' may be useful in seeing how your
 machine computes in real time. Depending on the machine type, the progress of the tape, stack, and/or 
 input string is shown after each state transition. For example, the following command will sleep 
