@@ -10,6 +10,8 @@
 int flag_verbose = 0;
 double delay = 0;
 char tm_blank = '_';
+char tm_bound = '\0';
+int tm_bound_halt = 0;
 
 struct State *State_create(char *name)
 {
@@ -266,15 +268,16 @@ struct Automaton *Automaton_import(char *filename)
 		 state[STATE_NAME_MAX],
 		 start[STATE_NAME_MAX],
 		 final[STATE_NAME_MAX * 100],
-		 reject[STATE_NAME_MAX * 100];
+		 reject[STATE_NAME_MAX * 100],
+		 special[STATE_NAME_MAX * 100];
 	char symbol, readsym, writesym, direction;
 	char alphabet[100];
 	int linenum=1;
 	int linechar;
-	int start_exists = 0;
 	int final_exists = 0;
 
 	int mystate=1;
+	struct Stack *symstack = Stack_create();
 	struct Automaton *automaton = Automaton_create();
 	while ((read = getline(&line, &len, fp)) != -1) {
 			int i = 0;
@@ -282,7 +285,7 @@ struct Automaton *Automaton_import(char *filename)
 			int k = 0;
 			int spaces = 0;
 			linechar = 1;
-			struct Stack *symstack = Stack_create();
+			
 			for (i = 0; line[i] != '\0'; i++) {
 				//printf("mystate: %d, line[i]: %c\n", mystate, line[i]);
 				
@@ -304,16 +307,15 @@ struct Automaton *Automaton_import(char *filename)
 					// Finish acquiring state name string
 					case 2:
 						if (line[i] == ':') {
-							*name = '\0';
-							strncat(name,line+j,k);
+							//*name = '\0';
+							//strncat(name,line+j,k);
 							spaces = 0;
-							if (!strcmp(name, "start")) {
+							if (!strcmp(name, "start") || 
+								!strcmp(name, "final") ||
+								!strcmp(name, "reject")) {
 								mystate = 20;
-							} else if (!strcmp(name, "final")) {
-								mystate = 20;
-							} else if (!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank")) {
+							} else if (!strcmp(name, "blank") ||
+								!strcmp(name, "bound")) {
 								mystate = 23;	
 							} else {
 								State_name_add(automaton, name);
@@ -333,8 +335,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 4;
 						// For empty string transitions
 						} else if (line[i] == '>') {
-							j = i + 1;
 							symbol = '\0';
+							Stack_push(symstack, symbol);
 							mystate = 5;
 						} else if (line[i] == '#') {
 							mystate = 7;
@@ -356,14 +358,14 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == ':') {
 							*name = '\0';
 							strncat(name, line+j, k);
-							if (!strcmp(name, "start")) {
+							
+							if (!strcmp(name, "start") || 
+								!strcmp(name, "final") ||
+								!strcmp(name, "reject")) {
 								mystate = 20;
-							} else if (!strcmp(name, "final")) {
-								mystate = 20;
-							} else if (!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank")) {
-								mystate = 23;	
+							} else if (!strcmp(name, "blank") ||
+								!strcmp(name, "bound")) {
+								mystate = 23;
 							} else {
 								State_name_add(automaton, name);
 								mystate = 3;
@@ -371,8 +373,8 @@ struct Automaton *Automaton_import(char *filename)
 							Stack_destroy(symstack);
 							symstack =  Stack_create();
 						} else if (isnamechar(line[i])) {
-							Stack_destroy(symstack);
 							k++;
+							Stack_destroy(symstack);
 							symstack =  Stack_create();
 							mystate=11;
 						} else mystate = 8;
@@ -384,7 +386,8 @@ struct Automaton *Automaton_import(char *filename)
 							k = 1;
 							mystate = 6;
 						} else if (isspace(line[i])) {
-							mystate = 15;
+							//mystate = 15;
+							mystate = 5;
 						} else mystate = 8;
 						break;;
 					// Finish acquiring state name string for the transition
@@ -411,9 +414,8 @@ struct Automaton *Automaton_import(char *filename)
 						// Allow multiple state transitions per symbol
 						} else if (line[i] == ',') {
 							*state = '\0';
-							//strncat(state, line+j, i-j);
 							strncat(state, line+j, k);
-							j = i + 1;
+							//j = i + 1;
 
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
@@ -426,6 +428,8 @@ struct Automaton *Automaton_import(char *filename)
 
 							mystate = 5;
 						} else if (isspace(line[i])) {
+							*state = '\0';
+							strncat(state, line+j, k);
 							mystate = 16;
 						} else if (line[i] == '(') {
 							*state = '\0';
@@ -471,18 +475,20 @@ struct Automaton *Automaton_import(char *filename)
 							k++;
 							mystate = 11;
 						} else if (isspace(line[i])) {
+							*name = '\0';
+							strncat(name,line+j,k);
 							mystate = 2;
 						} else if (line[i] == ':') {
 							*name = '\0';
-							strncat(name,line+j,k);
+							strncat(name, line+j, k);
+							
 							spaces = 0;
-							if (!strcmp(name, "start")) {
+							if (!strcmp(name, "start") || 
+								!strcmp(name, "final") ||
+								!strcmp(name, "reject")) {
 								mystate = 20;
-							} else if (!strcmp(name, "final")) {
-								mystate = 20;
-							} else if (!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank")) {
+							} else if (!strcmp(name, "blank") ||
+								!strcmp(name, "bound")) {
 								mystate = 23;	
 							} else {
 								State_name_add(automaton, name);
@@ -536,19 +542,12 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == ':') {
 							*name = '\0';
 							strncat(name, line+j, k);
-							if (!strcmp(name, "start")) {
-								//j = i + 1;
+							if (!strcmp(name, "start") || 
+								!strcmp(name, "final") ||
+								!strcmp(name, "reject")) {
 								mystate = 20;
-							} else if (!strcmp(name, "final")) {
-								//j = i + 1;
-								//mystate = 21;
-								mystate = 20;
-							} else if (!strcmp(name, "reject")) {
-								//j = i + 1;
-								//mystate = 22;
-								mystate = 20;
-							} else if (!strcmp(name, "blank")) {
-								//j = i + 1;
+							} else if (!strcmp(name, "blank") ||
+								!strcmp(name, "bound")) {
 								mystate = 23;								
 							} else {
 								State_name_add(automaton, name);
@@ -578,10 +577,6 @@ struct Automaton *Automaton_import(char *filename)
 						if (isspace(line[i]))
 							mystate = 16;
 						else if (line[i] == ',') {
-							*state = '\0';
-							strncat(state, line+j, k);
-							j = i + 1;
-
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
@@ -590,13 +585,9 @@ struct Automaton *Automaton_import(char *filename)
 								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
 								Transition_add(from, new_trans);
 							}
-							
 							spaces = 0;
 							mystate = 5;
 						} else if (line[i] == ';') {
-							*state = '\0';
-							strncat(state, line+j, k);
-
 							State_name_add(automaton, state);
 							struct State *from = State_get(automaton, name);
 							struct State *to = State_get(automaton, state);
@@ -607,13 +598,9 @@ struct Automaton *Automaton_import(char *filename)
 							}
 							Stack_destroy(symstack);
 							symstack = Stack_create(symstack);
-							
 							spaces = 0;							
 							mystate = 3;
 						} else if (line[i] == '(') {
-							*state = '\0';
-							strncat(state, line+j, k);
-							
 							mystate = 30;
 						} else 
 							mystate = 8;
@@ -649,85 +636,99 @@ struct Automaton *Automaton_import(char *filename)
 							k++;
 							mystate = 21;
 						} else if (isspace(line[i])) {
+							*special = '\0';
+							strncat(special,line+j,k);
 							mystate = 22;
 						} else if (line[i] == ',' || line[i] == ';') {
-							char special[STATE_NAME_MAX];
+							//char special[STATE_NAME_MAX];
 							*special = '\0';
 							strncat(special,line+j,k);
 							State_name_add(automaton, special);
 							struct State *new = State_get(automaton, special);
-							if (!strcmp(name, "start")) {
-								automaton->start = new;
-								new->start=1;
-								start_exists = 1;
-							} else if (!strcmp(name, "final")) {
-								if (new->reject) {
-									printf("%s cannot be both a final and reject state\n", special);
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-								}
-								new->final=1;
-								final_exists = 1;
-							} else if (!strcmp(name, "reject")) {
-								if (new->final) {
-									printf("%s cannot be both a final and reject state\n", special);
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-								}
-								new->reject=1;
-							}
 							
 							if (line[i] == ',') {
 								mystate = 20;
 							} else mystate = 3;
 							
+							if (!strcmp(name, "start")) {
+								if (automaton->start != NULL)
+									automaton->start->start = 0;
+								automaton->start = new;
+								new->start = 1;
+							} else if (!strcmp(name, "final")) {
+								if (new->reject) {
+									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
+									/*
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+									*/
+									mystate = 8;
+								}
+								new->final=1;
+								final_exists = 1;
+							} else if (!strcmp(name, "reject")) {
+								if (new->final) {
+									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
+									/*
+									Stack_destroy(symstack);
+									free(line);
+									Automaton_destroy(automaton);
+									fclose(fp);
+									exit(EXIT_FAILURE);
+									*/
+									mystate = 8;
+								}
+								new->reject=1;
+							}
 						} else mystate = 8;
 						break;
 					case 22:
 						if (isspace(line[i])) {
 							mystate = 22;
 						} else if (line[i] == ',' || line[i] == ';') {
-							char special[STATE_NAME_MAX];
-							*special = '\0';
-							strncat(special,line+j,k);
 							State_name_add(automaton, special);
 							struct State *new = State_get(automaton, special);
+							
+							if (line[i] == ',') {
+								mystate = 20;
+							} else mystate = 3;
+							
 							if (!strcmp(name, "start")) {
+								if (automaton->start != NULL)
+									automaton->start->start = 0;
 								automaton->start = new;
-								new->start=1;
-								start_exists = 1;
+								new->start = 1;
 							} else if (!strcmp(name, "final")) {
 								if (new->reject) {
-									printf("%s cannot be both a final and reject state\n", special);
+									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
+									/*
 									Stack_destroy(symstack);
 									free(line);
 									Automaton_destroy(automaton);
 									fclose(fp);
 									exit(EXIT_FAILURE);
+									*/
+									mystate = 8;
 								}
 								new->final=1;
 								final_exists = 1;
 							} else if (!strcmp(name, "reject")) {
 								if (new->final) {
-									printf("%s cannot be both a final and reject state\n", special);
+									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
+									/*
 									Stack_destroy(symstack);
 									free(line);
 									Automaton_destroy(automaton);
 									fclose(fp);
 									exit(EXIT_FAILURE);
+									*/
+									mystate = 8;
 								}
 								new->reject=1;
 							}
-							
-							if (line[i] == ',') {			
-								mystate = 20;
-							} else mystate = 3;
 						} else mystate = 8;
 						break;
 					// 23-27: line represents the custom blank character for tms
@@ -737,15 +738,24 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == '\'') { 
 							mystate = 24;
 						} else if (line[i] == ';') {
-							tm_blank = ' ';
+							if (!strcmp(name, "blank")) tm_blank = ' ';
+							if (!strcmp(name, "bound")) tm_bound = '\0';
 							mystate = 3;
 						} else { 
-							tm_blank = line[i];
+							if (!strcmp(name, "blank")) tm_blank = line[i];
+							if (!strcmp(name, "bound")) {
+								if (line[i] == 'H') tm_bound_halt = 1;
+								else tm_bound = line[i];
+							}
 							mystate = 27;
 						}
 						break;
 					case 24:
-						tm_blank = line[i];
+						if (!strcmp(name, "blank")) tm_blank = line[i];
+						if (!strcmp(name, "bound")) {
+								if (line[i] == 'H') tm_bound_halt = 1;
+								else tm_bound = line[i];
+							}
 						mystate = 25;
 						break;
 					case 25:
@@ -758,6 +768,8 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 26;
 						} else if (line[i] == ';') {
 							mystate = 3;
+						} else if (line[i] == ',') {
+							mystate = 28;
 						} else mystate = 8;
 						break;
 					case 27:
@@ -765,7 +777,26 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 27;
 						} else if (line[i] == ';') {
 							mystate = 3;
+						} else if (line[i] == ',') {
+							mystate = 28;
 						} else mystate = 8;
+						break;
+					// prevent trailing comma
+					case 28:
+						if (isspace(line[i])) {
+							mystate = 28;
+						} else if (line[i] == '\'') { 
+							mystate = 24;
+						} else if (line[i] == ';') {
+							mystate = 8;
+						} else { 
+							if (!strcmp(name, "blank")) tm_blank = line[i];
+							if (!strcmp(name, "bound")) {
+								if (line[i] == 'H') tm_bound_halt = 1;
+								else tm_bound = line[i];
+							}
+							mystate = 27;
+						}
 						break;
 					// BEGIN PDA EXTENSION
 					// empty 'read' char
@@ -1056,8 +1087,10 @@ struct Automaton *Automaton_import(char *filename)
 				}
 				linechar++;
 			}
-			
-			if (mystate != 3 && mystate !=13) { //&& mystate != 20 && mystate != 21 && mystate != 7) {
+	linenum++;
+	}
+	
+	if (mystate != 3 && mystate !=13) {
 				char highlight=line[linechar-2];
 				if (highlight == '\n') highlight = ' ';
 				fprintf(stderr,"Error on line %d, char [%d]:\n%.*s[%c]%s", 
@@ -1070,15 +1103,12 @@ struct Automaton *Automaton_import(char *filename)
 				exit(EXIT_FAILURE);
 			}
 			
-	linenum++;
-	Stack_destroy(symstack);
-	}
-
+	
 	free(line);
 	fclose(fp);
 
-	if (!start_exists || !final_exists) {
-		if (!start_exists) {
+	if (automaton->start == NULL || !final_exists) {
+		if (automaton->start == NULL) {
 			fprintf(stderr, "Please define a start state\n");
 		}
 		if (!final_exists) {
@@ -1247,6 +1277,8 @@ int Automaton_run(struct Automaton *automaton, char *input)
 	struct Automaton *next_states;
 	struct MultiStackList *next_stacks;
 	
+	//if (flag_verbose) putchar('\n');
+	
 	// Add empty string transitions to current array
 	State_add(current_states, automaton->start);
 	int printed_string = 0;
@@ -1397,8 +1429,8 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
 							if (trans->writesym != '\0')
 								copy->stack[copy->pos] = trans->writesym;
-							Stack_change_pos(copy, trans->direction);
-							Stack_add_to(next_stacks, trans->state, copy);
+							int branch_reject = Stack_change_pos(copy, trans->direction);
+							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
 						}
 					}
 				} else if (mstmp != NULL) {
@@ -1412,15 +1444,15 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 							struct Stack *copy = Stack_copy(stacktmp);
 							if (trans->writesym != '\0')
 								copy->stack[copy->pos] = trans->writesym;
-							Stack_change_pos(copy, trans->direction);
-							Stack_add_to(next_stacks, trans->state, copy);
+							int branch_reject = Stack_change_pos(copy, trans->direction);
+							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
 						}
 					}
 				}
 				if (state_added && flag_verbose) {
 					printf("\t%s > %s", state->name, trans->state->name);
-					if (trans->state->final) printf(" [F]");
-					if (trans->state->reject) printf(" [R]");
+					if (trans->state->final) { printf(" [F]"); }
+					if (trans->state->reject) { printf(" [R]"); }
 					struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
 					if (printmp) {
 						for (int k = 0; k < printmp->len; k++) {
@@ -1447,15 +1479,15 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
 							if (trans->writesym != '\0')
 								copy->stack[copy->pos] = trans->writesym;
-							Stack_change_pos(copy, trans->direction);
-							Stack_add_to(next_stacks, trans->state, copy);
+							int branch_reject = Stack_change_pos(copy, trans->direction);
+							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
 						}
 					}
 					
 					if (flag_verbose) {
 						printf("\t%s > %s", state->name, trans->state->name);
-						if (trans->state->final) printf(" [F]");
-						if (trans->state->reject) printf(" [R]");
+						if (trans->state->final) { printf(" [F]"); }
+						if (trans->state->reject) { printf(" [R]"); }
 						struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
 						if (printmp) {
 							for (int k = 0; k < printmp->len; k++) {
@@ -1476,6 +1508,7 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 		current_states = next_states;
 		current_stacks = next_stacks;
 		
+		// If no future states available, TM rejects
 		if (current_states->len == 0) {
 			printf("=>%s\n\tREJECTED\n", input);
 			MultiStackList_destroy(current_stacks);
@@ -1483,6 +1516,7 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 			return 1;
 		}
 		
+		// Only one nondeterministic branch need accept for NTM to accept
 		int reject_count = 0;
 		for (int i = 0; i < current_states->len; i++) {
 			if (current_states->states[i]->final) {
@@ -1494,6 +1528,7 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 				reject_count++;
 			}
 		}
+		// All nondeterministic branches must reject for NTM to reject
 		if (reject_count == current_states->len) {
 			printf("=>%s\n\tREJECTED\n", input);
 			MultiStackList_destroy(current_stacks);

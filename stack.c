@@ -39,18 +39,12 @@ void Stack_push(struct Stack *stack, char symbol)
 	stack->stack[stack->len] = '\0';
 }
 
-void Stack_write(struct Stack *stack, char symbol)
-{
-	//if (stack->
-}
-
-void Stack_change_pos(struct Stack *stack, char direction)
+int Stack_change_pos(struct Stack *stack, char direction)
 {
 	if (direction == 'L') {
 		if (stack->pos > 0) { 
 			stack->pos--;
-		} else {
-			//stack->max_len *= 2;
+		} else if (tm_bound != 'L') {
 			stack->stack = realloc(stack->stack, sizeof(char) * stack->max_len  * 2 + 1);
 			if (stack->stack == NULL) {
 				fprintf(stderr, "Error reallocating memory for the left end of stack\n");
@@ -62,12 +56,23 @@ void Stack_change_pos(struct Stack *stack, char direction)
 			stack->pos = stack->max_len-1;
 			stack->max_len *= 2;
 			
+		} else if (tm_bound_halt) {
+			return 1;
 		}
 	} else if (direction == 'R') {
-		stack->pos++;
-		if (stack->pos == stack->len)
-			Stack_push(stack, tm_blank);
+		
+		if (stack->pos < stack->len-1) {
+			stack->pos++;
+		} else if (stack->pos == stack->len-1) {
+			if (tm_bound == 'R') { 
+				if (tm_bound_halt) return 1;
+			} else {
+				stack->pos++;
+				Stack_push(stack, tm_blank);
+			}
+		}
 	}
+	return 0;
 }
 
 char Stack_pop(struct Stack *stack)

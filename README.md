@@ -51,24 +51,41 @@ supplied via the second "non-option" argument.
 ### Directives
 There are four directives that govern important aspects
 of the machine file:
+#### Syntax
 ```
 start:   [one state];
 final:   [comma-separated list of states];
 reject:  [comma-separated list of states];
-blank:   [one character]; (default: '_')
+blank:   [one character];
+bound:   [L | R | H | (empty) ];
+```
+#### Meaning
+```
+start:   + the state from which a machine begins
+final:   + the state(s) that signal the end of a machine 
+           and acceptance of the input string
+reject:  + the states(s) that signal the immediate end of 
+           a Turing machine and rejection of the input string
+blank:   + the character that "fills" the infinite end(s) of
+           a Turing machine's tape. Default is '_'
+bound:   + indicates which end of a Turing machine's tape is
+           not filled with infinite blanks. Default is
+		   empty (no character), meaning both tape ends are
+		   infinite.
 ```
 For all types of automata, the "start: " and "final: " 
-directives are required. The "reject: " and "blank: "
-directives apply only to Turing machines and are optional.
+directives are required. The "reject: ", "blank: ", and
+"bound: " directives apply only to Turing machines and are 
+optional.
 <br />
 <br />
 Understand that these directives are considered special
-state names, so please avoid defining states with these 
-names or referring to these names when defining transitions.
-The "final: " and "reject: " directives can be used on
-multiple lines and the listed states across all lines will 
-be aggregated. If the "start: " and "blank: " directives are 
-used on multiple lines, the lowest line will take precedence.
+state names, so please avoid referring to these names 
+when defining transitions. The "final: " and "reject: " 
+directives can be used on multiple lines and will be 
+aggregated. If the "start: ", "blank: ", and "bound: "  
+directives are used on multiple lines, the lowest line 
+(and its last listed element) will be used.
 
 ### General Syntax
 State names are defined by strings which contain no spaces 
@@ -90,7 +107,7 @@ The file format is quite forgiving of whitespace and empty lines,
 but understand that state names themselves may not contain any 
 whitespace. Special characters that would otherwise be considered 
 operators by the program may be defined within single quotes (' ') 
-for use in transitions. Code comments can be added in a similar manner
+for use in transitions. Code comments can be added in a manner similar
 to many shells by using the special character '#'.
 
 ### Transitions
@@ -194,18 +211,40 @@ be overridden by using the "blank: " directive. This blank character can
 be specified within single quotes.
 <br />
 <br />
-In this implementation, both the left and right ends of the tape are considered 
-to be filled with "infinite" blanks, but you shouldn't have any issues
-if you're used to designing machines whose tape only extends to the right. 
-There are several different definitions of Turing machines out there, so note the 
-"reject:" directive can be used to specify optional reject states. I'm not sure if you'd 
-ever need more than one reject state, but who am I to judge? ;)
+By default, both the left and right ends of the tape are considered 
+to be filled with "infinite" blanks. This behavior can be changed with the 
+"bound: " directive; 'L' indicates the tape is bounded at the left end, and 'R'
+indicates the tape is bounded at the right end. If the head reaches the bounded 
+end of the tape and tries to move further in the same direction, it will simply
+stay in place (and still apply any write operation specified). However, this behavior
+can also be overridden by listing 'H' (for halt) before or after 'R' or 'L'. 
+To clarify via some examples:
+```
+bound: L;
+```
+I'll call this Sipser style: the tape only extends infinitely to the right, and if the head
+tries to move left of the beginning, it stays in place (and still applies a write operation if
+given).
+```
+bound: L, H;
+```
+In the above, the tape extends infinitely to the right only. If the tape head tries to
+move left of the tape's beginning, the TM halts and rejects (for that branch). This 
+behavior is less common, but I read about it being used somewhere and thought it should be available.
+Bounding the right end of the tape with 'R' (and extending infinitely to the left) is also 
+a rather unusual option, but who am I to judge? :)
 <br />
 <br />
-The sleep command-line option '-s' may be useful in seeing how the
-tape progresses as the Turing machine computes. For instance,
-the following will sleep 250 milliseconds between
-each verbose output step:
+Further acknowledging the varying formal definitions out there, 
+please note the "reject:" directive is also optional for Turing machines, although they are commonly
+employed in the wild. In this program multiple reject states can be listed. I'm not sure why you'd ever 
+need more than one reject state, but again, who am I to judge? ;)
+
+### Sleep
+The sleep command-line option '-s' may be useful in seeing how your
+machine computes in real time. Depending on the machine type, the progress of the tape, stack, and/or 
+input string is shown after each state transition. For example, the following command will sleep 
+250 milliseconds between each verbose output step:
 ```
 $ ./tmf samples/tm_0lenPow2.txt 00000000 -s 0.25
 ```

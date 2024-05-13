@@ -6,6 +6,8 @@
 extern int flag_verbose;
 extern double delay;
 extern char tm_blank;
+extern char tm_bound;
+extern int tm_bound_halt;
 
 struct Automaton {
 	int max_len;

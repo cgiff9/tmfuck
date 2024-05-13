@@ -5,3 +5,6 @@ tmf:
 
 tmfuck:
 	$(CC) -o tmfuck tmfuck.c auto.c regex.c stack.c ops.c
+
+otto:
+	$(CC) -o otto tmfuck.c auto.c regex.c stack.c ops.c

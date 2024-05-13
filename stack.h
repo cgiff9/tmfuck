@@ -23,7 +23,7 @@ struct MultiStackList {
 
 struct Stack *Stack_create();
 void Stack_push(struct Stack *stack, char symbol);
-void Stack_change_pos(struct Stack *stack, char direction);
+int Stack_change_pos(struct Stack *stack, char direction);
 char Stack_pop(struct Stack *stack);
 char Stack_peek(struct Stack *stack);
 struct Stack *Stack_copy(struct Stack *stack);
