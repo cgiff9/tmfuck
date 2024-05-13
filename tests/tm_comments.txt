@@ -1,0 +1,13 @@
+# more
+start: q0;
+final: q4;
+bound: R,H;
+blank: _;
+
+q0: >q1,q2,q3; #fuck
+q1: 0>q1(R); _>q1(R); #fooo
+#fooey
+q2: 0>q2(R);
+ _>q2(R); #patootie
+q3: 0>q3(R); _>q3(R);
+#wowzer

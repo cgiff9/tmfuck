@@ -266,10 +266,7 @@ struct Automaton *Automaton_import(char *filename)
 
 	char name[STATE_NAME_MAX], 
 		 state[STATE_NAME_MAX],
-		 start[STATE_NAME_MAX],
-		 final[STATE_NAME_MAX * 100],
-		 reject[STATE_NAME_MAX * 100],
-		 special[STATE_NAME_MAX * 100];
+		 special[STATE_NAME_MAX];
 	char symbol, readsym, writesym, direction;
 	char alphabet[100];
 	int linenum=1;
@@ -277,6 +274,7 @@ struct Automaton *Automaton_import(char *filename)
 	int final_exists = 0;
 
 	int mystate=1;
+	int comment_state;
 	struct Stack *symstack = Stack_create();
 	struct Automaton *automaton = Automaton_create();
 	while ((read = getline(&line, &len, fp)) != -1) {
@@ -296,20 +294,18 @@ struct Automaton *Automaton_import(char *filename)
 							j=i;
 							k++;
 							mystate = 11;
-						} else if (line[i] == '#' || line[i] == '\n') {
-							mystate = 7;	
+							//mystate = 4;
 						} else if (isspace(line[i])) {
 							spaces++;
-							//j = i + 1;
 							mystate = 1;
+						} else if (line[i] == '#') {
+							comment_state = 3;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
 					// Finish acquiring state name string
 					case 2:
 						if (line[i] == ':') {
-							//*name = '\0';
-							//strncat(name,line+j,k);
-							spaces = 0;
 							if (!strcmp(name, "start") || 
 								!strcmp(name, "final") ||
 								!strcmp(name, "reject")) {
@@ -323,6 +319,9 @@ struct Automaton *Automaton_import(char *filename)
 							}
 						} else if (isspace(line[i])) {
 							mystate = 2;
+						} else if (line[i] == '#') {
+							comment_state = 2;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
 					// Begin parsing state transitions
@@ -338,12 +337,13 @@ struct Automaton *Automaton_import(char *filename)
 							symbol = '\0';
 							Stack_push(symstack, symbol);
 							mystate = 5;
-						} else if (line[i] == '#') {
-							mystate = 7;
 						} else if (line[i] == '\'') {
 							mystate = 9;
 						} else if (isspace(line[i])) {
 							mystate = 3;
+						} else if (line[i] == '#') {
+							comment_state = 3;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
 					// Set symbol for state transition
@@ -377,6 +377,9 @@ struct Automaton *Automaton_import(char *filename)
 							Stack_destroy(symstack);
 							symstack =  Stack_create();
 							mystate=11;
+						} else if (line[i] == '#') {
+							comment_state = 14;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
 					// Ensure destination state in transition consists of at least one char
@@ -388,6 +391,9 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (isspace(line[i])) {
 							//mystate = 15;
 							mystate = 5;
+						} else if (line[i] == '#') {
+							comment_state = 5;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
 					// Finish acquiring state name string for the transition
@@ -436,13 +442,24 @@ struct Automaton *Automaton_import(char *filename)
 							strncat(state, line+j, k);
 							
 							mystate = 30;
+						} else if (line[i] == '#') {
+							*state = '\0';
+							strncat(state, line+j, k);
+							comment_state = 16;
+							mystate = 7;
 						} else mystate = 8;
 						break;;
-					// state 7 is an accept state for comments
+					// COMMENT HANDLING
+					// comments can come after any line except for
+					// open-ended single-quoted characters (' or 'a) 
+					// Note: State names may not be split over lines. Why
+					//       would anyone want that? :P
+					// TODO: multi-line comments! -_-
 					case 7:
-						if (line[i] == '\n')
-							mystate = 3;
-						else mystate = 7;
+						if (line[i] == '\n') {
+							//mystate = 3;
+							mystate = comment_state;
+						} else mystate = 7;
 						break;
 					// Error
 					case 8:
@@ -466,8 +483,7 @@ struct Automaton *Automaton_import(char *filename)
 					case 10:
 						if (line[i] == '\'') {
 							mystate = 4;
-						} else
-							mystate = 8;
+						} else mystate = 8;
 						break;
 					// space case for state 1
 					case 11:
@@ -494,6 +510,11 @@ struct Automaton *Automaton_import(char *filename)
 								State_name_add(automaton, name);
 								mystate = 3;
 							}
+						} else if (line[i] == '#') {
+							*name = '\0';
+							strncat(name,line+j,k);
+							comment_state = 2;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 2
@@ -503,7 +524,10 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 12;
 						} else if (isspace(line[i])) {
 							mystate = 3;
-						}
+						} else if (line[i] == '#') {
+							comment_state = 3;
+							mystate = 7;
+						} else mystate = 8;
 						break;
 					// space case for state 3
 					case 13:
@@ -525,6 +549,9 @@ struct Automaton *Automaton_import(char *filename)
 							spaces = 0;
 							mystate = 5;
 						} else if (line[i] == '#') {
+							mystate = 7;
+						} else if (line[i] == '#') {
+							comment_state = 13;
 							mystate = 7;
 						} else mystate = 8;
 						break;
@@ -555,6 +582,9 @@ struct Automaton *Automaton_import(char *filename)
 							}
 							Stack_destroy(symstack);
 							symstack =  Stack_create();
+						} else if (line[i] == '#') {
+							comment_state = 14;
+							mystate = 7;
 						} else
 							mystate = 8;
 						break;
@@ -568,6 +598,9 @@ struct Automaton *Automaton_import(char *filename)
 							k = 1;
 							spaces = 0;
 							mystate = 6;
+						} else if (line[i] == '#') {
+							comment_state = 15;
+							mystate = 7;
 						} else 
 							mystate = 8;
 						break;
@@ -602,6 +635,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 3;
 						} else if (line[i] == '(') {
 							mystate = 30;
+						} else if (line[i] == '#') {
+							comment_state = 16;
+							mystate = 7;
 						} else 
 							mystate = 8;
 						break;
@@ -619,6 +655,9 @@ struct Automaton *Automaton_import(char *filename)
 							Stack_push(symstack, symbol);
 							spaces = 0;
 							mystate = 4;
+						} else if (line[i] == '#') {
+							comment_state = 17;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// line represents the start state
@@ -629,6 +668,9 @@ struct Automaton *Automaton_import(char *filename)
 							j=i;
 							k=1;
 							mystate = 21;
+						} else if (line[i] == '#') {
+							comment_state = 20;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 21:
@@ -683,6 +725,11 @@ struct Automaton *Automaton_import(char *filename)
 								}
 								new->reject=1;
 							}
+						} else if (line[i] == '#') {
+							*special = '\0';
+							strncat(special,line+j,k);
+							comment_state = 22;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 22:
@@ -729,6 +776,9 @@ struct Automaton *Automaton_import(char *filename)
 								}
 								new->reject=1;
 							}
+						} else if (line[i] == '#') {
+							comment_state = 22;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// 23-27: line represents the custom blank character for tms
@@ -741,14 +791,17 @@ struct Automaton *Automaton_import(char *filename)
 							if (!strcmp(name, "blank")) tm_blank = ' ';
 							if (!strcmp(name, "bound")) tm_bound = '\0';
 							mystate = 3;
-						} else { 
+						} else if (isnamechar(line[i])) { 
 							if (!strcmp(name, "blank")) tm_blank = line[i];
 							if (!strcmp(name, "bound")) {
 								if (line[i] == 'H') tm_bound_halt = 1;
 								else tm_bound = line[i];
 							}
 							mystate = 27;
-						}
+						} else if (line[i] == '#') {
+							comment_state = 23;
+							mystate = 7;
+						} else mystate = 8;
 						break;
 					case 24:
 						if (!strcmp(name, "blank")) tm_blank = line[i];
@@ -770,6 +823,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 3;
 						} else if (line[i] == ',') {
 							mystate = 28;
+						} else if (line[i] == '#') {
+							comment_state = 26;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 27:
@@ -779,6 +835,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 3;
 						} else if (line[i] == ',') {
 							mystate = 28;
+						} else if (line[i] == '#') {
+							comment_state = 27;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// prevent trailing comma
@@ -789,14 +848,17 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 24;
 						} else if (line[i] == ';') {
 							mystate = 8;
-						} else { 
+						} else if (isnamechar(line[i])) { 
 							if (!strcmp(name, "blank")) tm_blank = line[i];
 							if (!strcmp(name, "bound")) {
 								if (line[i] == 'H') tm_bound_halt = 1;
 								else tm_bound = line[i];
 							}
 							mystate = 27;
-						}
+						} else if (line[i] == '#') {
+							comment_state = 28;
+							mystate = 7;
+						} else mystate = 8;
 						break;
 					// BEGIN PDA EXTENSION
 					// empty 'read' char
@@ -817,6 +879,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 34;
 						} else if (line[i] == '\'') {
 							mystate = 50;
+						} else if (line[i] == '#') {
+							comment_state = 40;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 31:
@@ -827,6 +892,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 32;
 						} else if (line[i] == '\'') {
 							mystate = 51;
+						} else if (line[i] == '#') {
+							comment_state = 41;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 32:
@@ -836,6 +904,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 33;
 						} else if (line[i] == ',') {
 							mystate = 37;
+						} else if (line[i] == '#') {
+							comment_state = 42;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// State 33 represents the end of the pda specification
@@ -867,6 +938,9 @@ struct Automaton *Automaton_import(char *filename)
 							symstack = Stack_create(symstack);
 						
 							mystate = 3;
+						} else if (line[i] == '#') {
+							comment_state = 43;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// non-empty 'read' char
@@ -875,6 +949,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 44;
 						} else if (line[i] == '>') {
 							mystate = 35;
+						} else if (line[i] == '#') {
+							comment_state = 44;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 35:
@@ -888,6 +965,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 36;
 						} else if (line[i] == '\'') {
 							mystate = 55;
+						} else if (line[i] == '#') {
+							comment_state = 45;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 36:
@@ -895,6 +975,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 46;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 46;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 37:
@@ -903,6 +986,9 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == 'L' || line[i] == 'R') {
 							direction = line[i];
 							mystate = 38;
+						} else if (line[i] == '#') {
+							comment_state = 47;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 38:
@@ -910,6 +996,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 48;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 48;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 39:
@@ -919,6 +1008,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 60;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 49;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 30
@@ -936,6 +1028,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 34;
 						} else if (line[i] == '\'') {
 							mystate = 50;
+						} else if (line[i] == '#') {
+							comment_state = 40;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 31
@@ -947,6 +1042,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 32;
 						} else if (line[i] == '\'') {
 							mystate = 51;
+						} else if (line[i] == '#') {
+							comment_state = 41;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 32
@@ -957,6 +1055,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 33;
 						} else if (line[i] == ',') {
 							mystate = 37;
+						} else if (line[i] == '#') {
+							comment_state = 42;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 33
@@ -988,6 +1089,9 @@ struct Automaton *Automaton_import(char *filename)
 							symstack = Stack_create(symstack);
 							
 							mystate = 3;
+						} else if (line[i] == '#') {
+							comment_state = 43;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 34
@@ -996,6 +1100,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 44;
 						} else if (line[i] == '>') {
 							mystate = 35;
+						} else if (line[i] == '#') {
+							comment_state = 44;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 35
@@ -1010,6 +1117,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 36;
 						} else if (line[i] == '\'') {
 							mystate = 55;
+						} else if (line[i] == '#') {
+							comment_state = 45;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 36
@@ -1018,6 +1128,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 46;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 46;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 37
@@ -1027,6 +1140,9 @@ struct Automaton *Automaton_import(char *filename)
 						} else if (line[i] == 'L' || line[i] == 'R') {
 							direction = line[i];
 							mystate = 38;
+						} else if (line[i] == '#') {
+							comment_state = 47;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 48:
@@ -1034,6 +1150,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 48;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 48;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 49:
@@ -1043,6 +1162,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 60;
 						} else if (line[i] == ')') {
 							mystate = 33;
+						} else if (line[i] == '#') {
+							comment_state = 49;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					case 50:
@@ -1074,6 +1196,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 61;
 						} else if (line[i] == '>') {
 							mystate = 31;
+						} else if (line[i] == '#') {
+							comment_state = 61;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 					// space case for state 60
@@ -1082,6 +1207,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 61;
 						} else if (line[i] == '>') {
 							mystate = 31;
+						} else if (line[i] == '#') {
+							comment_state = 61;
+							mystate = 7;
 						} else mystate = 8;
 						break;
 				}
