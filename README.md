@@ -314,6 +314,10 @@ This program employs no explicit parallelization when it comes to command execut
 machines. If you want something like that, maybe consider backgrounding (`command &`) or daemonizing your program. 
 All valid "immediately next" states will have their comands executed in an order that may not be totally
 consistent across machine steps as various nondeterministic branches continue, halt, or split into even more branches.
+<br />
+<br />
+If a single state is transitioned to multiple times within a single step of the machine, that destination state's
+command will only be run once. In the future, command execution will be extended to individual transitions! O_O
 
 ## Sleep
 The sleep command-line option '-s' may be useful in seeing how your
