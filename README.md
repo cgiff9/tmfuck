@@ -35,7 +35,7 @@ make tmf
 -c                print config only
 ```
 The verbose flag will show state transition
-information. The file supplied to the '-f' 
+information. The file supplied to the `-f` 
 argument may contain multiple strings with 
 one per line.
 
@@ -270,8 +270,8 @@ q1:
       NUM=10
       while [ "$NUM" -ge 0 ]; do
          echo $NUM ...
-		 sleep 0.1
-		 NUM=$((NUM - 1))
+         sleep 0.1
+         NUM=$((NUM - 1))
       done
    );
    1 > q2;
