@@ -15,15 +15,22 @@ int main(int argc, char **argv)
 
 	int deterministic = 0;
 	int minimize = 0;
+	int config_only = 0;
 
 	int opt;
 	int nonopt_index = 0;
-	while ((opt = getopt (argc, argv, "-:vf:r:dms:")) != -1)
+	while ((opt = getopt (argc, argv, "-:vxcf:r:dms:")) != -1)
 	{
 		switch (opt)
 		{
 			case 'v':
 				flag_verbose = 1;
+				break;
+			case 'x':
+				execute = 1;
+				break;
+			case 'c':
+				config_only = 1;
 				break;
 			case 'f':
 				input_string_file = optarg;
@@ -39,7 +46,7 @@ int main(int argc, char **argv)
 				break;
 			case 's':
 				delay = atof(optarg);
-				flag_verbose = 1;
+				//flag_verbose = 1;
 				break;
 			case '?':
 				fprintf(stderr, "Unknown option '-%c'\n", optopt);
@@ -67,7 +74,7 @@ int main(int argc, char **argv)
 		machine_file = NULL;
 	}
 
-	if (!input_string && !input_string_file) {
+	if (!input_string && !input_string_file &&!config_only) {
 		fprintf(stderr, "No input string supplied\n");
 		exit(EXIT_FAILURE);
 	}
@@ -87,6 +94,23 @@ int main(int argc, char **argv)
 	// 2 for PDA
 	// 3 for TM
 	int machine_code = isDFA(a0);
+	
+	if (config_only) {
+		if ( (deterministic || minimize) && machine_code < 2) {
+			struct Automaton *a1 = nfa_to_dfa(a0);
+			Automaton_destroy(a0);
+			if (minimize) {
+				a0 = DFA_minimize(a1);
+				Automaton_destroy(a1);
+			} else {
+				a0 = a1;
+			}
+		}
+		Automaton_print(a0);
+		Automaton_destroy(a0);
+		return 0;
+	}
+	
 	
 	if (deterministic) {
 		if (machine_code == 0) {

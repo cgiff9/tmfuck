@@ -7,6 +7,7 @@ A simple interpreted language for building Turing machines and other automata
 - [x] Deterministic pushdown automata (DPDA)
 - [x] Turing machines
 - [x] Nondeterministic Turing machines
+- [x] State-driven command execution
 
 While the name of this language is inspired by the venerable migrane-inducing 
 [brainfuck](https://esolangs.org/wiki/Brainfuck), it is the main goal of this project to 
@@ -30,6 +31,8 @@ make tmf
 -m                minimize DFA
 -r <string>       regex string
 -s <seconds>      sleep between verbose output steps
+-x                enable command execution
+-c                print config only
 ```
 The verbose flag will show state transition
 information. The file supplied to the '-f' 
@@ -73,42 +76,42 @@ bound:   + indicates which end of a Turing machine's tape is
            empty (no character), meaning both tape ends are
            infinite.
 ```
-For all types of automata, the "start: " and "final: " 
-directives are required. The "reject: ", "blank: ", and
-"bound: " directives apply only to Turing machines and are 
+For all types of automata, the `start:` and `final:` 
+directives are required. The `reject:`, `blank:`, and
+`bound:` directives apply only to Turing machines and are 
 optional.
 <br />
 <br />
 Understand that these directives are considered special
 state names, so please avoid referring to these names 
-when defining transitions. The "final: " and "reject: " 
+when defining transitions. The `final:` and `reject:` 
 directives can be used on multiple lines and will be 
-aggregated. If the "start: ", "blank: ", and "bound: "
+aggregated. If the `start:`, `blank:`, and `bound:`
 directives are used on multiple lines, the lowest line 
 (and its last listed element) will be used.
 
 ### General Syntax
 State names are defined by strings which contain no spaces 
-followed by a colon ':'. Following the colon, on the same line
+followed by a colon `:`. Following the colon, on the same line
 or any number of new lines, may be a list of transitions defined 
 for that state. Each transition definition must be followed by a 
-semicolon ';'.
+semicolon `;`.
 <br />
 <br />
 States which do not require any transitions can still be 
 referenced by the transition definitions of other states. 
-This can be helpful for certain "final: " or "reject: "
+This can be helpful for certain `final:` or `reject:`
 states that simply act to terminate the program and require no
 more input/tape processing. That being said, it is still perfectly 
-valid to define a state that contains zero transitions (ie. "q5: ").
+valid to define a state that contains zero transitions (ie. `q5: `).
 <br />
 <br />
 The file format is quite forgiving of whitespace and empty lines, 
 but understand that state names themselves may not contain any 
 whitespace. Special characters that would otherwise be considered 
-operators by the program may be defined within single quotes (' ') 
+operators by the program may be defined within single quotes `' '`)
 for use in transitions. Code comments can be added in a manner similar
-to many shells by using the special character '#'.
+to many shells by using the special character `#`.
 
 ### Transitions
 ```
@@ -122,7 +125,7 @@ q3: 0>q0; 1>q1;
 To specify a state's transitions, first type out
 the state's name followed by a colon. Next type a
 character that will trigger a transition, followed
-by a '>', then followed by a destination state name. 
+by a `>`, then followed by a destination state name. 
 Transition characters may be specified within single 
 quotes, ie.:
 
@@ -136,14 +139,14 @@ comma-separated list:
 q0: 0, 1, 2, ';', a >q0;
 q1: a,b,c > q2;
 ```
-Following the '>' character can be a comma-separated
+Following the `>` character can be a comma-separated
 list of state names:
 ```
 q0: 'a' >q0,q1;
 q1: 'a','b','c' > q1, q2; 
 ```
-For nondeterministic automata, an empty string (epsilon) transition
-can be supplied by typing '>' with no preceding characters:
+For nondeterministic automata, an empty string (Epsilon) transition
+can be supplied by typing `>` with no preceding characters:
 ```
 q1: >q0,q2; a>q0;
 q2: 
@@ -154,7 +157,7 @@ q2:
 #### Pushdown Automata
 Additional transition information can be supplied to design
 pushdown automata, or PDAs. Here's an example that recognizes a 
-number of 0s followed by the same number of 1s:
+number of `0`s followed by the same number of `1`s:
 ```
 start: q1;
 final: q1, q4;
@@ -190,7 +193,7 @@ character to the tape, change direction, both, or neither.
 <br />
 <br />
 Keep in mind that, whether intended or not, a TM can run forever 
-if it has been designed to do so (CTRL+C may be your friend). Here
+if it has been designed to do so (`CTRL+C` may be your friend). Here
 is an example TM that takes a binary string and increments it by one:
 ```
 start: q0;
@@ -206,18 +209,18 @@ q1:
     @>q2 (>1,L);
 q2:
 ```
-The default blank symbol is the underscore '\_', but this can
-be overridden by using the "blank: " directive. This blank character can 
+The default blank symbol is the underscore `_`, but this can
+be overridden by using the `blank:` directive. This blank character can 
 be specified within single quotes.
 <br />
 <br />
 By default, both the left and right ends of the tape are considered 
 to be filled with "infinite" blanks. This behavior can be changed with the 
-"bound: " directive; 'L' indicates the tape is bounded at the left end, and 'R'
+`bound:` directive; `L` indicates the tape is bounded at the left end, and `R`
 indicates the tape is bounded at the right end. If the head reaches the bounded 
 end of the tape and tries to move further in the same direction, it will simply
 stay in place (and still apply any write operation specified). However, this behavior
-can also be overridden by listing 'H' (for halt) before or after 'R' or 'L'. 
+can also be overridden by listing `H` (for halt) before or after `R` or `L`. 
 To clarify via some examples:
 ```
 bound: L;
@@ -231,14 +234,86 @@ bound: L, H;
 In this example, the tape also extends infinitely to the right only, but if the tape head tries to
 move left of the tape's beginning, the TM halts and rejects (for that branch). This 
 behavior is less common, but I read about it being used somewhere and thought it should be available.
-Bounding the right end of the tape with 'R' (and extending infinitely to the left) is also 
+Bounding the right end of the tape with `R` (and extending infinitely to the left) is also 
 a rather unusual option, but who am I to judge? :)
 <br />
 <br />
 Further acknowledging the varying formal definitions out there, 
-please note the "reject:" directive is also optional for Turing machines, although they are commonly
+please note the `reject:` directive is also optional for Turing machines, although they are commonly
 employed in the wild. In this program multiple reject states can be listed. I'm not sure why you'd ever 
 need more than one reject state, but again, who am I to judge? ;)
+
+## Command Execution
+You didn't think this was just a silly acceptor/rejector, did you? For you *real* nerds out there, consider adding 
+your own custom commands to any defined states. These commands are executed any time a state is
+*transitioned to*, meaning commands for the start state will not run immediately at the beginning.
+<br />
+<br />
+By default, no commands will be executed. To enable command execution, use the `-x` parameter.
+
+### Syntax
+Before or after you've defined transitions (if at all), you can put system commands in-between 
+a `$( ... );` statement. This command should inherit the environment of the shell you ran `./tmf`
+in, but when in doubt you can always use full filepaths.
+```
+q0: 0>q1; $(echo hello);
+```
+Yes, like the transition definitions themselves, mind the semicolon after the closing parentheses. 
+Note that everything inside the shell statement is taken literally: spaces, tabs, newlines, the
+whole nine yards. So if you prefer not to write an external script and call that script's name,
+you can just write the script directly in the machine file!
+```
+q0: 0 > q1; 1>q0;
+q1:
+   0>q1;
+   $(
+      NUM=10
+      while [ "$NUM" -ge 0 ]; do
+         echo $NUM ...
+		 sleep 0.1
+		 NUM=$((NUM - 1))
+      done
+   );
+   1 > q2;
+```
+### Quirks
+If you'd prefer, multiple shell statements can be used after defining the state's name, but be WARNED:
+```
+q0: 0>q0; $(echo first thing); $(echo second thing);
+```
+The second command is simply concetenated to the first command, EXACTLY. So when q0's command runs, it will be:
+```
+$ echo first thingecho second thing
+first thingecho second thing
+```
+You can either append a ';' to the first statement...
+```
+q0: 0>q0; $(echo first thing;); $(echo second thing);
+```
+... append a newline (literally) to the first statement ...
+```
+q0: 0>q0; $(echo first thing
+); $(echo second thing);
+```
+... or just do similar to what was shown in the very first example in this section:
+```
+q0: 0>q0; $( echo first thing
+echo second thing)
+```
+Or if things get too crazy, just write a damn script and call it. Format your shell statements to 
+your heart's content, just know that *every* character you type is preserved. Please understand your
+shell's specific quirks when it comes to syntax and environment variables. 
+```
+$ ls -lh /bin/sh
+lrwxrwxrwx 1 root root 1 May 17  2021 /bin/sh -> bash
+```
+Be careful with this feature, but have fun, too! :)
+
+### Note on nondeterminism
+This program employs no explicit parallelization when it comes to command executions for nondeterministic 
+machines. If you want something like that, maybe consider backgrounding (`command &`) or daemonizing your program. 
+All valid "immediately next" states will have their comands executed in an order that may not be totally
+consistent across machine steps as various nondeterministic branches continue, halt, or split into even more branches.
 
 ## Sleep
 The sleep command-line option '-s' may be useful in seeing how your
@@ -246,7 +321,7 @@ machine computes in real time. Depending on the machine type, the progress of th
 input string is shown after each state transition. For example, the following command will sleep 
 250 milliseconds between each verbose output step:
 ```
-$ ./tmf samples/tm_0lenPow2.txt 00000000 -s 0.25
+$ ./tmf samples/tm_0lenPow2.txt 00000000 -v -s 0.25
 ```
 
 ## Regex

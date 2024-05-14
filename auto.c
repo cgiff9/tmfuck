@@ -9,6 +9,7 @@
 
 int flag_verbose = 0;
 double delay = 0;
+int execute = 0;
 char tm_blank = '_';
 char tm_bound = '\0';
 int tm_bound_halt = 0;
@@ -31,6 +32,7 @@ struct State *State_create(char *name)
 	state->start = 0;
 	state->final = 0;
 	state->reject = 0;
+	state->cmd = NULL;
 	return state;
 }
 
@@ -110,6 +112,7 @@ struct Transition *Transition_create(char symbol, struct State *state, char read
 	trans->readsym = readsym;
 	trans->writesym = writesym;
 	trans->direction = direction;
+	trans->cmd = NULL;
 	return trans;
 }
 
@@ -130,10 +133,12 @@ void Transition_add(struct State *state, struct Transition *trans)
 void State_destroy(struct State *state)
 {
 	for (int i = 0; i < state->num_trans; i++) {
+		if (state->trans[i]->cmd != NULL) free(state->trans[i]->cmd);
 		free(state->trans[i]);
 	}
 	free(state->name);
 	free(state->trans);
+	if (state->cmd != NULL) free(state->cmd);
 	free(state);
 }
 
@@ -218,6 +223,7 @@ void State_print(struct State *state)
 	if (state->final) printf(" [F]");
 	if (state->reject) printf(" [R]");
 	if (state->start) printf(" [S]");
+	if (execute && state->cmd) printf(" $(%s)", state->cmd);
 
 	printf("\n");
 }
@@ -231,7 +237,7 @@ void Automaton_print(struct Automaton *automaton)
 
 int isnamechar(char c)
 {
-	char *syms="~`!@$%^&*-_+=[{}]\\|\"<./?";
+	char *syms="~`!@%^&*-_+={}[]\\|\"<./?";
 	int res = 0;
 	for (int i = 0; syms[i] != '\0'; i++) {
 		if (c == syms[i]) {
@@ -272,6 +278,7 @@ struct Automaton *Automaton_import(char *filename)
 	int linenum=1;
 	int linechar;
 	int final_exists = 0;
+	int brackets;
 
 	int mystate=1;
 	int comment_state;
@@ -341,6 +348,9 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 9;
 						} else if (isspace(line[i])) {
 							mystate = 3;
+						} else if (line[i] == '$') {
+							//brackets = 1;
+							mystate = 100;
 						} else if (line[i] == '#') {
 							comment_state = 3;
 							mystate = 7;
@@ -377,6 +387,9 @@ struct Automaton *Automaton_import(char *filename)
 							Stack_destroy(symstack);
 							symstack =  Stack_create();
 							mystate=11;
+						} else if (line[i] == '$') {
+							//brackets = 1;
+							mystate = 100;
 						} else if (line[i] == '#') {
 							comment_state = 14;
 							mystate = 7;
@@ -549,8 +562,6 @@ struct Automaton *Automaton_import(char *filename)
 							spaces = 0;
 							mystate = 5;
 						} else if (line[i] == '#') {
-							mystate = 7;
-						} else if (line[i] == '#') {
 							comment_state = 13;
 							mystate = 7;
 						} else mystate = 8;
@@ -582,6 +593,9 @@ struct Automaton *Automaton_import(char *filename)
 							}
 							Stack_destroy(symstack);
 							symstack =  Stack_create();
+						} else if (line[i] == '$') {
+							//brackets = 1;
+							mystate = 100;
 						} else if (line[i] == '#') {
 							comment_state = 14;
 							mystate = 7;
@@ -1212,28 +1226,87 @@ struct Automaton *Automaton_import(char *filename)
 							mystate = 7;
 						} else mystate = 8;
 						break;
+					// COMMANDS
+					case 100:
+						if (line[i] == '(') {
+							brackets = 1;
+							j = i+1;
+							k = 0;
+							mystate = 101;
+						} else mystate = 8;
+						break;
+					case 101:
+						k++;
+						if (line[i] == '(') brackets++;
+						else if (line[i] == ')') {
+							brackets--;
+							if (brackets == 0) {
+								struct State *cmdstate = State_get(automaton, name);
+								if (cmdstate->cmd != NULL) {
+									cmdstate->cmd = realloc(cmdstate->cmd, sizeof(char) * (strlen(cmdstate->cmd) + k));
+									strncat(cmdstate->cmd, line+j, k-1);
+								} else {
+									cmdstate->cmd = malloc(sizeof(char) * k);
+									cmdstate->cmd[0] = '\0';
+									strncat(cmdstate->cmd, line+j, k-1);
+								}
+								mystate = 102;
+								//for (int m = 0; cmdstate->cmd[m] != '\0'; m++) {
+								//	putchar(cmdstate->cmd[m]);
+								//}
+								//putchar('\n');
+								//printf("cmd: %s\n", cmdstate->cmd);
+							} else { 
+								//k++;
+								mystate = 101;
+							}
+						} else if (line[i] == '\n') {
+							struct State *cmdstate = State_get(automaton, name);
+							if (cmdstate->cmd != NULL) {
+								cmdstate->cmd = realloc(cmdstate->cmd, sizeof(char) * (strlen(cmdstate->cmd)+k+1));
+								strncat(cmdstate->cmd, line+j, k);
+							} else {
+								cmdstate->cmd = malloc(sizeof(char) * (k+1));
+								cmdstate->cmd[0] = '\0';
+								strncat(cmdstate->cmd, line+j, k);
+							}
+							j = i; j=0;
+							k = 0;
+							mystate = 101;
+						} else {
+							//k++;
+							mystate = 101;
+						}
+						break;
+					case 102:
+						if (line[i] == ';') {
+							mystate = 3;
+						} else if (isspace(line[i])) {
+							mystate = 102;
+						} else mystate = 8;
+						break;
 				}
 				linechar++;
 			}
 	linenum++;
 	}
 	
-	if (mystate != 3 && mystate !=13) {
-				char highlight=line[linechar-2];
-				if (highlight == '\n') highlight = ' ';
-				fprintf(stderr,"Error on line %d, char [%d]:\n%.*s[%c]%s", 
-					linenum, linechar -1, linechar-2, line, highlight, line+linechar-1);
-				if (line[linechar-2] == '\n') putchar('\n');
-				free(line);
-				fclose(fp);
-				Automaton_destroy(automaton);
-				Stack_destroy(symstack);
-				exit(EXIT_FAILURE);
-			}
-			
-	
-	free(line);
+	Stack_destroy(symstack);
 	fclose(fp);
+	
+	if (mystate != 3 && mystate !=13) {
+		char highlight=line[linechar-2];
+		if (highlight == '\n') highlight = ' ';
+		fprintf(stderr,"Error on line %d, char [%d]:\n%.*s[%c]%s", 
+		linenum, linechar -1, linechar-2, line, highlight, line+linechar-1);
+		if (line[linechar-2] == '\n') putchar('\n');
+		
+		free(line);
+		Automaton_destroy(automaton);
+		exit(EXIT_FAILURE);
+	}
+			
+	free(line);
 
 	if (automaton->start == NULL || !final_exists) {
 		if (automaton->start == NULL) {
@@ -1320,6 +1393,7 @@ int DFA_run(struct Automaton *automaton, char *input)
 					if (state->trans[j]->state->final) printf(" [F]\n"); else printf("\n");
 				}
 				state = state->trans[j]->state;
+				if (execute && state->cmd != NULL) system((const char *)state->cmd);
 				break;
 			}
 		}
@@ -1491,6 +1565,11 @@ int Automaton_run(struct Automaton *automaton, char *input)
 			}
 		}
 		
+		for (int j = 0; j < next_states->len; j++) {
+			if (execute && next_states->states[j]->cmd != NULL) 
+				system(next_states->states[j]->cmd);
+		}
+		
 		if (delay) nsleep(delay);
 		
 		Automaton_clear(current_states);
@@ -1627,6 +1706,11 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 					}
 				}
 			}
+		}
+		
+		for (int i = 0; i < next_states->len; i++) {
+			if (execute && next_states->states[i]->cmd != NULL) 
+				system(next_states->states[i]->cmd);
 		}
 		
 		if (delay) nsleep(delay);

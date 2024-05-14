@@ -1,7 +1,7 @@
 start : q1;
 final: q4;
 q1: 
-	>q2 (>$);       # push initial stack symbol
+	>q2 (>'$');       # push initial stack symbol
 q2: 
 	0>q2 (>0), q3;	# push 0 or nondeterministically "eat" the middle 0 
 	1>q2 (>1), q3;  # push 1 or nondeterministically "eat" the middle 1
@@ -9,5 +9,5 @@ q2:
 q3:
 	0>q3 (0>);      # pop 0
 	1>q3 (1>);      # pop 1
-	>q4 ($>);       # pop initial stack symbol
+	>q4 ('$'>);       # pop initial stack symbol
 q4:

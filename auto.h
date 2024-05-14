@@ -5,6 +5,7 @@
 
 extern int flag_verbose;
 extern double delay;
+extern int execute;
 extern char tm_blank;
 extern char tm_bound;
 extern int tm_bound_halt;
@@ -23,10 +24,12 @@ struct Transition {
 	char readsym;
 	char writesym;
 	char direction;
+	char *cmd;
 };
 
 struct State {
 	char *name;
+	char *cmd;
 	int start;
 	int final;
 	int reject;
