@@ -11,17 +11,58 @@ A simple interpreted language for building Turing machines and other automata
 
 While the name of this language is inspired by the venerable migrane-inducing 
 [brainfuck](https://esolangs.org/wiki/Brainfuck), it is the main goal of this project to 
-make the textual design of Turing machines and other automata a more comprehensible excercise,
-especially for any struggling students out there.
+make the textual design of Turing machines and other automata more comprehensible.
 <br />
 <br />
 That being said, there is an element of brainfuckery that is unavoidable when exploring these
 topics. You have been warned!
 
+## Example Program
+This [example](../main/samples/tm_0lenPow2.txt) Turing machine will accept a string of 0s
+with a length that is a power of 2.
+```
+start: q1;
+final: q7;
+reject: q6;
+q1:
+	_>q6 (R);
+	x>q6 (R);
+	0>q2 (>_, R);
+q2:
+	x>q2 (R);
+	0>q3 (>x,R);
+	_>q7 (R);
+q3:
+	x>q3 (R);
+	0>q4 (R);
+	_>q5 (L);
+q4:
+	x>q4 (R);
+	0>q3 (>x,R);
+	_>q6 (R);
+q5:
+	0>q5 (L);
+	x>q5 (L);
+	_>q2 (R);
+q6:
+q7:
+```
+
 ## Building
 ```
 make tmf
 ```
+
+## Usage
+```
+$ ./tmf <machine file> <input string>
+$ ./tmf samples/dfa_divBy8.txt 1000
+=>1000
+	ACCEPTED
+```
+A DFA, NFA, PDA, or TM file can be supplied via the first
+"non-option" argument. The input string is
+supplied via the second "non-option" argument.
 
 ## Arguments
 ```
@@ -39,56 +80,7 @@ information. The file supplied to the `-f`
 argument may contain multiple strings with 
 one per line.
 
-## Usage
-```
-$ ./tmf <machine file> <input string>
-$ ./tmf samples/dfa_divBy8.txt 1000
-=>1000
-	ACCEPTED
-```
-A DFA, NFA, PDA, or TM file can be supplied via the first
-"non-option" argument. The input string is
-supplied via the second "non-option" argument.
-
 ## File Format
-### Directives
-There are five directives that govern important aspects
-of the machine file:
-#### Syntax
-```
-start:   [one state];
-final:   [comma-separated list of states];
-reject:  [comma-separated list of states];
-blank:   [one character];
-bound:   [L | R | H | (empty) ];
-```
-#### Meaning
-```
-start:   + the state from which a machine begins
-final:   + the state(s) that signal the end of a machine 
-           and acceptance of the input string
-reject:  + the states(s) that signal the immediate end of 
-           a Turing machine and rejection of the input string
-blank:   + the character that "fills" the infinite end(s) of
-           a Turing machine's tape. Default is '_'
-bound:   + indicates which end of a Turing machine's tape is
-           not filled with infinite blanks. Default is
-           empty (no character), meaning both tape ends are
-           infinite.
-```
-For all types of automata, the `start:` and `final:` 
-directives are required. The `reject:`, `blank:`, and
-`bound:` directives apply only to Turing machines and are 
-optional.
-<br />
-<br />
-Understand that these directives are considered special
-state names, so please avoid referring to these names 
-when defining transitions. The `final:` and `reject:` 
-directives can be used on multiple lines and will be 
-aggregated. If the `start:`, `blank:`, and `bound:`
-directives are used on multiple lines, the lowest line 
-(and its last listed element) will be used.
 
 ### General Syntax
 State names are defined by strings which contain no spaces 
@@ -242,6 +234,45 @@ Further acknowledging the varying formal definitions out there,
 please note the `reject:` directive is also optional for Turing machines, although they are commonly
 employed in the wild. In this program multiple reject states can be listed. I'm not sure why you'd ever 
 need more than one reject state, but again, who am I to judge? ;)
+
+### Directives
+There are five directives that govern important aspects
+of the machine file:
+#### Syntax
+```
+start:   [one state];
+final:   [comma-separated list of states];
+reject:  [comma-separated list of states];
+blank:   [one character];
+bound:   [L | R | H | (empty) ];
+```
+#### Meaning
+```
+start:   + the state from which a machine begins
+final:   + the state(s) that signal the end of a machine 
+           and acceptance of the input string
+reject:  + the states(s) that signal the immediate end of 
+           a Turing machine and rejection of the input string
+blank:   + the character that "fills" the infinite end(s) of
+           a Turing machine's tape. Default is '_'
+bound:   + indicates which end of a Turing machine's tape is
+           not filled with infinite blanks. Default is
+           empty (no character), meaning both tape ends are
+           infinite.
+```
+For all types of automata, the `start:` and `final:` 
+directives are required. The `reject:`, `blank:`, and
+`bound:` directives apply only to Turing machines and are 
+optional.
+<br />
+<br />
+Understand that these directives are considered special
+state names, so please avoid referring to these names 
+when defining transitions. The `final:` and `reject:` 
+directives can be used on multiple lines and will be 
+aggregated. If the `start:`, `blank:`, and `bound:`
+directives are used on multiple lines, the lowest line 
+(and its last listed element) will be used.
 
 ## Command Execution
 You didn't think this was just a silly acceptor/rejector, did you? For you *real* nerds out there, consider adding 
