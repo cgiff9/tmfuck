@@ -30,6 +30,7 @@ struct Transition {
 struct State {
 	char *name;
 	char *cmd;
+	char **cmd_args;
 	int start;
 	int final;
 	int reject;

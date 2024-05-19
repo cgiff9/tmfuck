@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <errno.h>
 #include "auto.h"
 #include "regex.h"
 #include "stack.h"
@@ -33,6 +37,12 @@ struct State *State_create(char *name)
 	state->final = 0;
 	state->reject = 0;
 	state->cmd = NULL;
+	//state->cmd_args = NULL;
+	state->cmd_args = malloc(sizeof(char *));
+	state->cmd_args[0] = NULL;
+	//state->cmd_args[0] = malloc(sizeof(char));
+	//state->cmd_args[0][0] = '\0';
+	//printf("BLAHHH: %d\n", strlen(state->cmd_args[0]));
 	return state;
 }
 
@@ -136,9 +146,14 @@ void State_destroy(struct State *state)
 		if (state->trans[i]->cmd != NULL) free(state->trans[i]->cmd);
 		free(state->trans[i]);
 	}
+	
+	if (state->cmd != NULL) free(state->cmd);
+	for (int i = 0; state->cmd_args[i] != NULL; i++) {
+		free(state->cmd_args[i]);
+	}
+	free(state->cmd_args);
 	free(state->name);
 	free(state->trans);
-	if (state->cmd != NULL) free(state->cmd);
 	free(state);
 }
 
@@ -255,6 +270,65 @@ static int State_compare(const void *a, const void *b)
 	struct State *s1 = (struct State *)b;
 
 	return strcmp(*(char *const*)s0->name, *(char *const*)s1->name);
+}
+
+void State_cmd_run(struct State *state) {
+  pid_t pid;
+  int status;
+  pid_t ret;
+  char *env[] = { (char*)NULL };
+  extern char **environ;
+ 
+  pid = fork();
+  if (pid == -1) {
+	fprintf(stderr, "Error forking command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
+  } else if (pid != 0) {
+    while ((ret = waitpid(pid, &status, 0)) == -1) {
+      if (errno != EINTR) {
+		fprintf(stderr, "Error returned from command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
+        exit(EXIT_FAILURE);
+        break;
+      }
+    }
+    if ((ret == 0) ||
+        !(WIFEXITED(status) && !WEXITSTATUS(status))) {
+      /* Report unexpected child status */
+    }
+  } else {
+	if (execvp(state->cmd_args[0], state->cmd_args) == -1) {
+	  fprintf(stderr, "Error executing command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
+      _Exit(127);
+    }
+  }
+}
+
+int State_cmd_arg_add(struct State *cmdstate, int arg_index, int j, int k, int first)
+{
+	if (first) {
+		cmdstate->cmd_args = realloc(cmdstate->cmd_args, sizeof(char *) * (arg_index+2));
+		if (cmdstate->cmd_args == NULL) {
+			fprintf(stderr, "Error allocating first pointer to command args\n");
+			exit(EXIT_FAILURE);
+		}
+		
+		cmdstate->cmd_args[arg_index] = malloc(sizeof(char) * (k+2));
+		if (cmdstate->cmd_args[arg_index] == NULL) {
+			fprintf(stderr, "Error allocating string for new command arg\n");
+			exit(EXIT_FAILURE);
+		}
+		
+		cmdstate->cmd_args[arg_index][0] = '\0';
+	} else {
+		cmdstate->cmd_args[arg_index] = realloc(cmdstate->cmd_args[arg_index],
+			sizeof(char) * (strlen(cmdstate->cmd_args[arg_index]) + k + 2));
+		if (cmdstate->cmd_args == NULL) {
+			fprintf(stderr, "Error allocating new pointer to command args\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+	strncat(cmdstate->cmd_args[arg_index], cmdstate->cmd+j, k);
+	
+	return 0;
 }
 
 struct Automaton *Automaton_import(char *filename) 
@@ -1280,11 +1354,220 @@ struct Automaton *Automaton_import(char *filename)
 						break;
 					case 102:
 						if (line[i] == ';') {
-							mystate = 3;
+							//mystate = 3;
+							mystate = 103;
 						} else if (isspace(line[i])) {
+							//k = 0;
 							mystate = 102;
 						} else mystate = 8;
 						break;
+					case 103:
+						int n = 0;
+						k = 0;
+						struct State *cmdstate = State_get(automaton, name);
+						char *cmd = cmdstate->cmd;
+						int brackets = 0;
+						int arg_index = 0;
+						
+						int mycmdstate = 1;
+						for (n = 0; cmd[n] != '\0'; n++) {
+							//printf("\tmycmdstate: %d, cmd[%d]: %c\n", mycmdstate, n, cmd[n]);
+							
+							switch(mycmdstate) {
+								case 1:
+									//brackets = 0;
+									if (isspace(cmd[n])) {
+										mycmdstate = 1;
+									} else if (cmd[n] == '"') {
+										j = n + 1;
+										k = 0;
+										mycmdstate = 14;
+									} else if (cmd[n] == '\'') {
+										j = n + 1;
+										k = 0;
+										mycmdstate = 13;
+									} else if (cmd[n] == '{') {
+										brackets++;
+										j = n + 1;
+										k = 0;
+										mycmdstate = 12;
+									} else {
+										j = n;
+										k = 1;
+										mycmdstate = 11;
+									}
+									break;
+								// String begin: basic char
+								case 11:
+									if (isspace(cmd[n])) {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										arg_index++;
+										mycmdstate = 1;
+									} else if (cmd[n] == '{') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										j = n + 1;
+										k = 0;
+										brackets++;
+										mycmdstate = 22;
+									} else if (cmd[n] == '\'') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										j = n + 1;
+										k = 0;
+										mycmdstate = 23;
+									} else if (cmd[n] == '"') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										j = n + 1;
+										k = 0;
+										mycmdstate = 24;
+									} else {
+										k++;
+										mycmdstate = 11;
+									}
+									break;
+								// String begin: '}'
+								case 12:
+									if (cmd[n] == '{') brackets++;
+									
+									if (cmd[n] == '}' && --brackets == 0) {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 12;
+									}
+									break;
+								// String begin: '\''
+								case 13:
+									if (cmd[n] == '\'') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 13;
+									}
+									break;
+								// String begin: '"'
+								case 14:
+									if (cmd[n] == '\"') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 14;
+									}
+									break;
+								// String middle: basic char
+								case 21:
+									if (isspace(cmd[n])) {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										arg_index++;
+										mycmdstate = 1;
+									} else if (cmd[n] == '{') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);	
+										j = n + 1;
+										k = 0;
+										brackets++;
+										mycmdstate = 22;
+									} else if (cmd[n] == '\'') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										j = n + 1;
+										k = 0;
+										mycmdstate = 23;
+									} else if (cmd[n] == '"') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										j = n + 1;
+										k = 0;
+										mycmdstate = 24;
+									} else {
+										k++;
+										mycmdstate = 21;
+									}
+									break;
+								// String middle: '}'
+								case 22:
+									if (cmd[n] == '{') brackets++;
+									
+									if (cmd[n] == '}' && --brackets == 0) {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 22;
+									}
+									break;
+								// String middle: '\''
+								case 23:
+									if (cmd[n] == '\'') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 23;
+									}
+									break;
+								// String middle: '"'
+								case 24:
+									if (cmd[n] == '"') {
+										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+										mycmdstate = 30;
+									} else {
+										k++;
+										mycmdstate = 24;
+									}
+									break;	
+								// String end
+								case 30:
+									if (isspace(cmd[n])) {
+										arg_index++;
+										mycmdstate = 1;
+									} else if (cmd[n] == '{') {										
+										j = n + 1;
+										k = 0;
+										brackets++;
+										mycmdstate = 22;
+									} else if (cmd[n] == '\'') {
+										j = n + 1;
+										k = 0;
+										mycmdstate = 23;
+									} else if (cmd[n] == '"') {
+										j = n + 1;
+										k = 0;
+										mycmdstate = 24;
+									} else {
+										j = n;
+										k = 1;
+										mycmdstate = 21;
+									}
+									break;
+							}	
+							//printf("\t brackets: %d\n", brackets);		
+						}
+						//printf("\tmycmdstate: %d, cmd[%d]: %c\n", mycmdstate, n, cmd[n]);
+						
+						if (mycmdstate == 11 ) {
+							State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
+							arg_index++;
+						} else if (mycmdstate == 21) {
+							State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
+							arg_index++;
+						} else if (mycmdstate == 30 || mycmdstate == 22 || mycmdstate == 23 || mycmdstate == 24 ) {
+							cmdstate->cmd_args = realloc(cmdstate->cmd_args, sizeof(char *) * (arg_index+2));
+							if (cmdstate->cmd_args == NULL) {
+								fprintf(stderr, "Error allocating new pointer to command args\n");
+								exit(EXIT_FAILURE);
+							}
+							arg_index++;
+						} 
+						
+						cmdstate->cmd_args[arg_index] = (char *)NULL;
+						mystate = 3;
+						
+						// test
+						/*
+						for (int n = 0; cmdstate->cmd_args[n] != NULL; n++) 
+							printf("\t\t%s argv[%d]: '%s'\n", cmdstate->name, n, cmdstate->cmd_args[n]);
+						break;
+						*/
 				}
 				linechar++;
 			}
@@ -1393,7 +1676,7 @@ int DFA_run(struct Automaton *automaton, char *input)
 					if (state->trans[j]->state->final) printf(" [F]\n"); else printf("\n");
 				}
 				state = state->trans[j]->state;
-				if (execute && state->cmd != NULL) system((const char *)state->cmd);
+				if (execute && state->cmd != NULL) State_cmd_run(state);
 				break;
 			}
 		}
@@ -1567,7 +1850,7 @@ int Automaton_run(struct Automaton *automaton, char *input)
 		
 		for (int j = 0; j < next_states->len; j++) {
 			if (execute && next_states->states[j]->cmd != NULL) 
-				system(next_states->states[j]->cmd);
+				State_cmd_run(next_states->states[j]);
 		}
 		
 		if (delay) nsleep(delay);
@@ -1710,7 +1993,9 @@ int TuringMachine_run(struct Automaton *automaton, char *input)
 		
 		for (int i = 0; i < next_states->len; i++) {
 			if (execute && next_states->states[i]->cmd != NULL) 
-				system(next_states->states[i]->cmd);
+				//printf("%s: running %s\n", next_states->states[i]->name, next_states->states[i]->cmd_args[0]);
+				State_cmd_run(next_states->states[i]);
+				//system(next_states->states[i]->cmd);
 		}
 		
 		if (delay) nsleep(delay);

@@ -3,13 +3,13 @@ final: q0;
 q0: 
 	0>q0;
 	1>q1; 
-	$(
+	$(sh -c '
 		echo this
 		echo cool
 		echo neat
-	);
+	');
 q1: 
-	$(
+	$(sh -c '
 		echo q1:
 		i=0 #comment
 		while [ "$i" -lt 3 ]; do # another acomment
@@ -17,26 +17,20 @@ q1:
 			i=$((i+1)) # here too
 			#sleep 1
 		done
-	);
+	');
 	0>q2;
 	1>q3; 
-q1: 
-	$(echo puppy); 
-	$(;echo kitty);
 q2: 
 	0>q4; 
 	1>q5; 
 	$(echo q2:);
-q2: $(
-
-
-echo hiss);
+q2: $(echo hiss);
 q3: 
 	0>q6; 
 	1>q7; 
 	$(echo q3:);
 q4: 0>q0; 1>q1;
-	$(
+	$(sh -c {
 		echo q4:
 		STUFF="one two three four"
 		for i in $STUFF; do
@@ -44,7 +38,7 @@ q4: 0>q0; 1>q1;
 			#sleep .5
 		done
 		printf '\n'
-	); 
+	}); 
 q5: 
 	0>q2; 
 	1>q3; 

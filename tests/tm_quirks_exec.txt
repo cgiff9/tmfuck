@@ -1,0 +1,33 @@
+start: q0;
+final: q4;
+bound: R;
+blank: _;
+
+q0: 0>q1(R); 
+$(sh -c {
+i='0'
+while [ $i -lt 6 ]; do
+   echo "$i  2"
+   echo 'a a'
+   sleep .1
+   i=$((i+1))
+done
+{ echo $PATH; }
+}
+);
+q1: 0>q0(L); 
+$(echo 
+''''''""""{}{}''""{}a {}''""b 
+{''''''""""{}{}''""{}a {}''""b}   
+'abc'def 
+'abc''def' 
+"abc"def 
+abcdef 
+abc{}def 
+abc{def}ghi 
+{def}ghi 
+abc'ghi'p 
+{wx}{yz}
+qr{st}uv{wx}
+{}abc''def"ghi" 
+);

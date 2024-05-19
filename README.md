@@ -162,13 +162,13 @@ number of `0`s followed by the same number of `1`s:
 start: q1;
 final: q1, q4;
 q1: 
-    >q2 (>$);   # go to q2 and push initial stack symbol '$'
+    >q2 (>'$');    # go to q2 and push initial stack symbol '$'
 q2: 
-    0>q2 (>0);  # upon input '0', go to q2 and push '0' to stack
-    1>q3 (0>);  # upon input '1', go to q3 and pop '0' from stack
+    0>q2  (>0);    # upon input '0', go to q2 and push '0' to stack
+    1>q3  (0>);    # upon input '1', go to q3 and pop '0' from stack
 q3: 
-    1>q3 (0>);  # upon input '1', stay in q3 and pop '0' from stack
-    >q4 ($>);   # go to q4 and pop '$' from stack
+    1>q3  (0>);    # upon input '1', stay in q3 and pop '0' from stack
+    >q4 ('$'>);    # go to q4 and pop '$' from stack
 q4:
 ```
 Look, now you can actually [parse HTML](https://stackoverflow.com/a/1732454)!
@@ -258,55 +258,63 @@ in, but when in doubt you can always use full filepaths.
 ```
 q0: 0>q1; $(echo hello);
 ```
-Yes, like the transition definitions themselves, mind the semicolon after the closing parentheses. 
-Note that everything inside the shell statement is taken literally: spaces, tabs, newlines, the
-whole nine yards. So if you prefer not to write an external script and call that script's name,
-you can just write the script directly in the machine file!
+
+Like the transition definitions themselves, mind the semicolon after the closing parentheses. 
+
+Note: A previous version of this program always ran the commands via the default shell. Now,
+the shell is only used if *explicitly* invoked.
+
+#### Quotes
+Please take some time to understand what the following two sentences *exactly* mean:
+1. All characters between two matching quotes or between two curly braces `{ }` are treated as a single argument.
+2. All characters following an unmatched quote or unclosed open curly brace will be ignored.
+
+If you'd like to see examples of this quoting in action, check out [tm_quirks_exec.txt](../tests/tm_quirks_exec.txt)
+
+If you do plan on calling a shell script and would prefer not to write one in a file elsewhere, 
+you can write the script directly in the machine file!
 ```
 q0: 0 > q1; 1>q0;
 q1:
    0>q1;
-   $(
+   $(sh -c {
       NUM=10
       while [ "$NUM" -ge 0 ]; do
-         echo $NUM ...
+         echo "$NUM ..." # does this really need quotes?
+		 echo 'literally just $NUM'
          sleep 0.1
          NUM=$((NUM - 1))
       done
+	  { echo foo; echo fum; } >> out.txt
+   }
    );
    1 > q2;
 ```
-### Quirks
-If you'd prefer, multiple shell statements can be used after defining the state's name, but be WARNED:
-```
-q0: 0>q0; $(echo first thing); $(echo second thing);
-```
-The second command is simply concetenated to the first command, EXACTLY. So when q0's command runs, it will be:
-```
-$ echo first thingecho second thing
-first thingecho second thing
-```
-You can either append a ';' to the first statement...
-```
-q0: 0>q0; $(echo first thing;); $(echo second thing);
-```
-... append a newline (literally) to the first statement ...
-```
-q0: 0>q0; $(echo first thing
-); $(echo second thing);
-```
-... or just do similar to what was shown in the very first example in this section:
-```
-q0: 0>q0; $( echo first thing
-echo second thing)
-```
-Or if things get too crazy, just write a damn script and call it. Format your shell statements to 
-your heart's content, just know that *every* character you type is preserved. Please understand your
-shell's specific quirks when it comes to syntax and environment variables. 
+Note that in the above example, everything between the curly braces is passed to `sh -c` as a single
+string (newlines, spaces, tabs, quotes, inner curly braces and all). These braces are useful if you plan 
+on writing a script that will make use of both single quote `'` and double quote `"` characters.
+
+Of course, please understand which shell you're calling and it's own syntactical quirks!
 ```
 $ ls -lh /bin/sh
 lrwxrwxrwx 1 root root 1 May 17  2021 /bin/sh -> bash
 ```
+Keep in mind that in the following command statement, `echo` is being
+directly run by `tmf` and not via an intermediate shell:
+```
+q0: 0>q1; $(echo one two three);
+```
+In the above case, `echo` is being given three separate arguments: "one", "two", and "three".
+```
+q0: 0>q1; $(echo 'one two three');
+```
+In this example, `echo` is being given a single argument: "one two three". Keep in mind that
+the command arguments in the following statements are identical to the above:
+```
+q0: 0>q1; $(echo "one two three");
+q1: 0>q0; $(echo {one two three});
+```
+
 Be careful with this feature, but have fun, too! :)
 
 ### Note on nondeterminism
