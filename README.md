@@ -269,7 +269,7 @@ Please take some time to understand what the following two sentences *exactly* m
 1. All characters between two matching quotes or between two curly braces `{ }` are treated as a single argument.
 2. All characters following an unmatched quote or unclosed open curly brace will be ignored.
 
-If you'd like to see examples of this quoting in action, check out [tm_quirks_exec.txt](../tests/tm_quirks_exec.txt)
+If you'd like to see examples of this quoting in action, check out [tm_quirks_exec.txt](../main/tests/tm_quirks_exec.txt)
 
 If you do plan on calling a shell script and would prefer not to write one in a file elsewhere, 
 you can write the script directly in the machine file!
