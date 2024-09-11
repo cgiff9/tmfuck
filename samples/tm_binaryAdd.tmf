@@ -1,0 +1,40 @@
+#* tm_binaryAdd.tmf
+
+ Adds to binary digits to produce binary sum
+ > For every decrement of the right number, the
+   left number is incremented. This continues
+   until the right number is zero.
+ > Takes a long time to finish when the right 
+   number is large.
+
+*#
+
+start: q0;
+final: q7;
+
+q0:
+	0 > q0(0,R);
+	1 > q0(1,R);
+	_ > q1(_,R);
+q1:
+	0 > q1(0,R);
+	1 > q1(1,R);
+	_ > q2(_,L);
+q2:
+	0 > q2(1,L);
+	1 > q3(0,L);
+	_ > q5(_,R);
+q3:
+	0 > q3(0,L);
+	1 > q3(1,L);
+	_ > q4(_,L);
+q4:
+	0 > q0(1,R);
+	1 > q4(0,L);
+	_ > q0(1,R);
+q5:
+	1 > q5(_,R);
+	_ > q6;#(_);
+q6:
+	_ > q6(L);
+	0,1 > q7(R);

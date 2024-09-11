@@ -1,0 +1,5 @@
+# This file accepts the empty lanuage implicitly.
+
+# If a .tmf file has only whitespace, comments, or is
+# totally empty, an Automaton with only one state
+# is created. No final states are defined.

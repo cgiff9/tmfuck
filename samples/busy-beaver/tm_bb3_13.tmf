@@ -1,0 +1,8 @@
+start: a;
+final: h;
+blank: 0;
+
+a: 0 > b(1,R); 1 > c(1,L);
+b: 0 > a(1,L); 1 > b(1,R);
+c: 0 > b(1,L); 1 > h(1,R);
+

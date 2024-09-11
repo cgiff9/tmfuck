@@ -1,0 +1,173 @@
+#* tm_decimalAddCarry.tmf
+ 
+ Adds two decimal numbers to produce decimal sum
+ > saves right summand, continues to add it to
+   new sum 
+
+*#
+
+start: qi;
+#final: done;
+
+DIGITS = 0,1,2,3,4,5,6,7,8,9;
+MARKS = a,b,c,d,e,f,g,h,i,j;
+ALPHA = $DIGITS, $MARKS;
+
+# qi,qj: scrub tape to rightmost digit
+# of right number
+qi:
+	_ > qj(R);
+	$ALPHA > qi(R);
+qj:
+	_ > init(L);
+	$ALPHA > qj(R);
+
+init:
+	0 > send0(a,L);
+	1 > send1(b,L);
+	2 > send2(c,L);
+	3 > send3(d,L);
+	4 > send4(e,L);
+	5 > send5(f,L);
+	6 > send6(g,L);
+	7 > send7(h,L);
+	8 > send8(i,L);
+	9 > send9(j,L);
+
+send0:
+	$DIGITS > send0(L); _ > add0(L);
+send1:
+	$DIGITS > send1(L); _ > add1(L);
+send2:
+	$DIGITS > send2(L); _ > add2(L);
+send3:
+	$DIGITS > send3(L); _ > add3(L);
+send4:
+	$DIGITS > send4(L); _ > add4(L);
+send5:
+	$DIGITS > send5(L); _ > add5(L);
+send6:
+	$DIGITS > send6(L); _ > add6(L);
+send7:
+	$DIGITS > send7(L); _ > add7(L);
+send8:
+	$DIGITS > send8(L); _ > add8(L);
+send9:
+	$DIGITS > send9(L); _ > add9(L);
+
+add0:
+	$MARKS > add0(L);
+	0,_ > fetch(a,R); 1 > fetch(b,R); 
+	2 > fetch(c,R); 3 > fetch(d,R);
+	4 > fetch(e,R); 5 > fetch(f,R); 
+	6 > fetch(g,R); 7 > fetch(h,R);
+	8 > fetch(i,R); 9 > fetch(j,R);
+add1:
+	$MARKS > add1(L);
+	0,_ > fetch(b,R); 1 > fetch(c,R); 
+	2 > fetch(d,R); 3 > fetch(e,R);
+	4 > fetch(f,R); 5 > fetch(g,R);
+	6 > fetch(h,R); 7 > fetch(i,R);
+	8 > fetch(j,R);
+	9 > carry(a,L);
+add2:
+	$MARKS > add2(L);
+	0,_ > fetch(c,R); 1 > fetch(d,R);
+	2 > fetch(e,R); 3 > fetch(f,R);
+	4 > fetch(g,R); 5 > fetch(h,R);
+	6 > fetch(i,R); 7 > fetch(j,R);
+	8 > carry(a,L); 9 > carry(b,L);
+add3:
+	$MARKS > add3(L);
+	0,_ > fetch(d,R); 1 > fetch(e,R);
+	2 > fetch(f,R); 3 > fetch(g,R);
+	4 > fetch(h,R); 5 > fetch(i,R);
+	6 > fetch(j,R);
+	7 > carry(a,L); 8 > carry(b,L);
+	9 > carry(c,L);
+add4:
+	$MARKS > add4(L);
+	0,_ > fetch(e,R); 1 > fetch(f,R);
+	2 > fetch(g,R); 3 > fetch(h,R);
+	4 > fetch(i,R); 5 > fetch(j,R);
+	6 > carry(a,L); 7 > carry(b,L);
+	8 > carry(c,L); 9 > carry(d,L);
+add5:
+	$MARKS > add5(L);
+	0,_ > fetch(f,R); 1 > fetch(g,R);
+	2 > fetch(h,R); 3 > fetch(i,R);
+	4 > fetch(j,R);
+	5 > carry(a,L); 6 > carry(b,L);
+	7 > carry(c,L); 8 > carry(d,L);
+	9 > carry(e,L);
+add6:
+	$MARKS > add6(L);
+	0,_ > fetch(g,R); 1 > fetch(h,R);
+	2 > fetch(i,R); 3 > fetch(j,R);
+	4 > carry(a,L); 5 > carry(b,L);
+	6 > carry(c,L); 7 > carry(d,L);
+	8 > carry(e,L); 9 > carry(f,L);
+add7:
+	$MARKS > add7(L);
+	0,_ > fetch(h,R); 1 > fetch(i,R);
+	2 > fetch(j,R);
+	3 > carry(a,L); 4 > carry(b,L);
+	5 > carry(c,L); 6 > carry(d,L);
+	7 > carry(e,L); 8 > carry(f,L);
+	9 > carry(g,L);
+add8:
+	$MARKS > add8(L);
+	0,_ > fetch(i,R); 1 > fetch(j,R);
+	2 > carry(a,L); 3 > carry(b,L);
+	4 > carry(c,L); 5 > carry(d,L);
+	6 > carry(e,L); 7 > carry(f,L);
+	8 > carry(g,L); 9 > carry(h,L);
+add9:
+	$MARKS > add9(L);
+	0,_ > fetch(j,R);
+	1 > carry(a,L); 2 > carry(b,L);
+	3 > carry(c,L); 4 > carry(d,L);
+	5 > carry(e,L); 6 > carry(f,L);
+	7 > carry(g,L); 8 > carry(h,L);
+	9 > carry(i,L);
+
+carry:
+	0,_ > fetch(1,R); 1 > fetch(2,R);
+	2 > fetch(3,R); 3 > fetch(4,R);
+	4 > fetch(5,R); 5 > fetch(6,R);
+	6 > fetch(7,R); 7 > fetch(8,R);
+	8 > fetch(9,R);
+	9 > carry(0,L);
+
+fetch:
+	$ALPHA > fetch(R); _ > check(R);
+
+check:
+	$MARKS > check(L);
+	_ > unmark(L);
+	$DIGITS > next(R);
+
+next:
+	$DIGITS > next(R);
+	$MARKS,_ > init(L);
+
+unmark:
+	a > unmark(0,L); b > unmark(1,L);
+	c > unmark(2,L); d > unmark(3,L);
+	e > unmark(4,L); f > unmark(5,L);
+	g > unmark(6,L); h > unmark(7,L);
+	i > unmark(8,L); j > unmark(9,L);
+	$DIGITS,_ > done(R);
+
+done:
+	$DIGITS > done(R);
+	_ > loop(R);
+
+loop:
+	a > loop(0,R); b > loop(1,R);
+	c > loop(2,R); d > loop(3,R);
+	e > loop(4,R); f > loop(5,R);
+	g > loop(6,R); h > loop(7,R);
+	i > loop(8,R); j > loop(9,R);
+	_ > init(L);
+

@@ -1,0 +1,57 @@
+#* tm_binaryAddCarry.tmf
+ 
+ Adds to binary digits to produce binary sum
+ > significantly fewer steps than tm_binaryAdd.tmf
+ > uses extra marking symbols (x,y) to aid in 
+   computing carry bit
+
+*#
+
+start: qi;
+final: qh;
+
+ALPHA = 0,1,x,y;
+
+# qi,qj: scrub tape to rightmost digit
+# of right number
+qi:
+	_ > qj(R);
+	$ALPHA > qi(R);
+qj:
+	_ > q0(L);
+	$ALPHA > qj(R);
+
+q0:
+	_ > q8(_,L);
+	0 > q6(_,L);
+	1 > q1(_,L);
+q1:
+	_ > q2(_,L);
+	$ALPHA > q1(L);
+q2:
+	_,0 > q4(y,R);
+	1 > q3(x,L);
+	x,y > q2(L);
+q3:
+	_,0 > q4(1,R);
+	1 > q3(0,L);
+q4:
+	_ > q5(_,R);
+	$ALPHA > q4(R);
+q5:
+	_ > q0(_,L);
+	$ALPHA > q5(R);
+q6:
+	_ > q7(_,L);
+	$ALPHA > q6(L);
+q7:
+	_,0 > q4(x,R);
+	1 > q4(y,R);
+	x,y > q7(L);
+q8:
+	x > q8(0,L);
+	y > q8(1,L);
+	_,0,1 > q9(R);
+q9:
+	_ > qh(L);
+	$ALPHA > q9(R);

@@ -1,0 +1,53 @@
+#a0: a>a0;
+NAME=f,o,d;
+gi = a,b,#
+c#
+\#
+$NAME #
+,#
+a#
+;#
+
+start#
+=#
+a#
+,#
+b#
+;#
+
+sta#
+=#
+q,e;
+
+a0: a>a0;
+
+final#
+=#
+s#
+,#
+t#
+;#
+
+reject#
+=#
+i#
+,#
+j#
+;#
+
+blank#
+=#
+@#
+,#
+j#
+;
+
+bound#
+=#
+ #
+s#
+#
+#
+#
+;#
+final:a0;

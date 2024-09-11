@@ -1,0 +1,14 @@
+# This language accepts the empty string
+
+# The empty string may be passed as input
+# by simply providing no input string argument,
+# or passing '' or "" as the input string
+# > So, the following machine runs are equivalent:
+#   ./tmf emptystring.tmf ''
+#   ./tmf emptystring.tmf ""
+#   ./tmf emptystring.tmf
+
+# The start state is automatically set to q0
+# (see emptylang_explicit for more details)
+
+final: q0;

@@ -1,0 +1,14 @@
+# Figure 1.36 (pg 53) in Sipser's Intro to Theory of Comp
+
+start: q1;
+final: q1;
+
+q1: 
+	b > q2;
+	> q3;
+q2:
+	a > q2;
+	a,b > q3;
+q3:
+	a > q1;
+

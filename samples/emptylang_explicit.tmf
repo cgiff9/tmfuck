@@ -1,0 +1,11 @@
+# Same language as emptylang_implicit, only the
+# single non-accepting state is defined.
+
+# In tmf, if no start state is defined, the start
+# state will be set to either:
+#  1. the first state listed that specifies transitions
+#  2. if not (1), the first state listed
+#
+#  > So, 'start:q0' is the same machine as 'q0:'
+
+q0:

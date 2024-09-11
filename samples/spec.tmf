@@ -1,0 +1,2123 @@
+############################################
+#### This tmfuck machine recognizes a   ####
+#### tmfuck machine configuration with  ####
+#### valid syntax.                      ####
+############################################
+#==========================================#
+#
+# Let this file serve as the language 
+# specification for tmfuck.
+#
+# Copyright Charley Gifford 2024
+# GPL v2.0
+#
+# cgiff907@gmail.com
+#
+#####################################################################
+# These chars may not be used in state and variable names. When used 
+# as chars in variable definitions or transitions, they must be 
+# referred to by their ASCII decimal values or be single-quoted, 
+# as they are below to define $TOKEN.  :)
+#####################################################################
+
+  TOKEN = ':', '>', '$', ',', ';', '(', ')', ''', '\', '#', '=' ;
+
+# TOKEN =  58,  62,  36,  44,  59,  40,  41,  39,  92,  35,  61 ;
+
+#===================================================================#
+#   :      state name/transition symbol delimiter
+#   >      transition symbol/destination delimiter
+#   $      variable reference, command statement container $(echo foo)
+#   ,      list delimiter for symbols, destinations
+#   ;      end of statement delimiter for transitions, directives, variable definitions
+#   ()     extended operations (push/pop/direction) container
+#   ''     char literal container
+#   \      set difference operator for variables: A \ B -> 'that in A not in B'
+#   #      single-line comment indicator
+#   #* *#  multi-line comment encapsulators
+
+#####################################################################
+# ASCII catch-all variable   
+#####################################################################
+
+   ANY = 00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,
+         20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,
+         40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,
+         60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,
+         80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,
+         100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,
+         115,116,117,118,119,120,121,122,123,124,125,126,127 ;
+
+########################
+# "Universal" delimiters
+# (whitespace)
+########################
+
+   SPACE = 09,10,11,12,13,32;
+
+#========================
+# C stdlib isspace():
+#------------------------
+# 09: horizontal tab
+# 10: line feed (newline)
+# 11: vertical tab
+# 12: form feed
+# 13: carriage return
+# 32: space
+
+########################################################################
+# Continuous strings of digits are permitted as elements (symbols) in
+# variable definitions and transition statements, which will be
+# interpreted as their integer (decimal) values.
+# > Negative values may be specified, and will be properly represented
+#   if CELL_TYPE (in auto.h) is defined as a signed type. If CELL_TYPE
+#   is an unsigned type, the negative decimal will be cast to be 
+#   properly represented by the unsigned type. This casting occurs for
+#   any decimal symbol outside the range of CELL_TYPE
+#   -> ie. symbol -1 with CELL_TYPE unsigned char becomes 255
+#   ->     symbol 128 with CELL_TYPE char becomes -128
+# > Single digit symbols will always be interpreted (and printed) as
+#   their ASCII values. If you wish to specify the literal decimals
+#   in the include range 0 - 9, prepend a zero to them
+#   -> ie. symbol 0 = decimal 48, symbol 5 = decimal 53
+#          symbol 00 = decimal 0, symbol 05 = decimal 5
+#   -> Prepending 0 is unecessary for decimals < 0 (-011) or > 9 (016), 
+#      but is still allowed
+########################################################################
+
+  DIGIT = 0,1,2,3,4,5,6,7,8,9;
+
+########################################################################
+# The following chars need not be quoted in transition definitions and variable 
+# definitions. Only these chars may be used in state and variable names.
+########################################################################
+
+#* CHAR =  '!','"','%','&','*','+','.','/','<','-','?','@',
+          '[',']','^','_','`','{','|','}','~',
+           a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,
+		    A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,
+ 		    $DIGIT ; *#
+
+   CHAR = $ANY \ $TOKEN,$SPACE;
+
+#======================================================================#
+
+############
+# Other vars
+############
+
+DIR =  L, R;
+RW = $CHAR \ $DIR,$DIGIT,'-';
+NL = 10;
+COMMENT = $ANY \ $NL;
+
+#########################
+### MACHINE BEGIN! :) ###
+#########################
+#=======================#
+
+# Note about start/final/reject directives:
+#
+# > A start state need not explicitly be
+#   set if it is the first state to 
+#   be defined AND has transitions. That 
+#   state will be automatically set 
+#   to the start state. So if you've
+#   got:
+#
+#        q0:
+#        q1: 0 > q0;
+#
+#   then 'q1' will be set as the start
+#   state, since 'q0' has no transitions.
+#   If no transitions exist, the first
+#   listed state anywhere (including
+#   final/reject directives) is used.
+#
+#    --> note: any empty file (or file
+#        with only comments/spaces/etc)
+#        will be accepted and treated
+#        implicitly as the empty lanuage,
+#        which can also be defined explicitly
+#        by listing one or more states 
+#        with no transitions.
+#
+# > Final states are not required, but
+#   will result in machines without the
+#   ability to accept any strings.
+#
+# > Reject states were really meant for
+#   Turing machines only, but nothing
+#   is stopping you from using them for
+#   other machines. Theoretically multiple
+#   reject states aren't necessary, but
+#   practically the functionality is there.
+#
+# > As far as syntax goes, transitions may 
+#   be added going from reject states, but 
+#   they will be ignored during runtime.
+###########################################
+
+start: state1;
+final: state1,state1cmt,state1cmt_L,
+       sym1,sym1cmt,sym1cmt_L;
+
+# INITIAL STATES
+################
+#
+# These pretty much do the same thing the sym*
+# transitions do further down, with the distinct
+# difference of allowing NO transitions to be
+# detected.
+#
+# What are these 'ALTERNATE BRANCHES'?
+#
+# The 'alt' branches for directive name
+# and variable name definitions serve
+# to prevent transitions from being detected
+# prematurely.
+#
+# > Variable definitions can occur between state
+#   definitions and between individual transition 
+#   statements for a single state.
+#   > ie. q0: a>q1; VAR=1,2,3; b>q2; ...
+#
+# > The alternate 'var' branch is for 'header'
+#   variables that exist at the top of the file
+#   before any state definitions (like $TOKEN
+#   and $CHAR above)
+#
+# > The alternate directive branch must exist
+#   because partial matches of directive names
+#   like 'star=' and 'fin=' and 'bla='
+#   may turn out to be variable names, whose
+#   status as 'headers' will affect the state
+#   they need to return to; header variables 
+#   must never be followed by a transition 
+#   statement.
+#
+# > Unlike variable definitions, directives may 
+#   NOT be placed between transition statements.
+#   They are basically reserved state names.
+#
+# > Variables and states can have the same
+#   names. Variables can also have the same
+#   name as a directive. No weird cross-functional
+#   stuff, just strictly names we're talking about.
+#
+# > States may NOT share a name with any
+#   directive name, as they both depend on the colon
+#   operator.
+###################################################
+
+ELSECHAR = $CHAR \ s,f,r,b;
+
+state1:
+	$SPACE > state1; $ELSECHAR > state2;
+	s > start_alt1; f > final_alt1; r > reject_alt1; b > blkbnd_alt1;
+	'#' > state1cmt;
+state2:
+	$CHAR > state2; $SPACE > state3; ':' > sym1;
+	'#' > state2cmt; '=' > vardef_alt1;
+state3:
+	$SPACE > state3; ':' > sym1;
+	'#' > state2cmt; '=' > vardef_alt1;
+
+# Code Comments
+# -----------------------------------------------------
+# Nearly every state must be able to handle single and
+# multi-line (inline) comments
+# > Only exception being an unmatched quoted character
+#
+# Generally speaking, upon '\n' (or *#) comment states return 
+# to the state their 'parent' state sends whitespace to.
+# 
+# Single-line comments are like a unix shell: 
+#        # ...
+#
+# Multi-line (or inline) comments are similar to C:
+#        #* ... *#
+#
+# > The machine file is not valid if it contains 
+#   an unterminated multi-line comment
+# > Multi-line comments may encapsulate a single-line
+#   comment, but a multiline comment may not begin
+#   on a line that is already a single-line comment
+# -----------------------------------------------------
+# Note on whitespace:
+#
+# Because this is a 'free form' language, nearly every 
+# state must appropriately handle whitespace characters.
+# > In most cases, whitespace returns to its own state
+# > For 'character eating' states (usually states that
+#   process directive, state, or variable names),
+#   whitespace will exit the character 'eating' process
+#   and jump to some other state.
+#######################################################
+
+ELSECOMMENT = $ANY \ $NL,'*';
+MLCOMMENT = $ANY \ '*';
+MLRETRY = $ANY \ '#','*';
+state1cmt:
+	$ELSECOMMENT > state1cmt_L; '*' > state1cmt_ML1; $NL > state1;
+state1cmt_L:
+	$COMMENT > state1cmt_L; $NL > state1;
+state1cmt_ML1:
+	$MLCOMMENT > state1cmt_ML1; '*' > state1cmt_ML2;
+state1cmt_ML2:
+	'#' > state1; $MLRETRY > state1cmt_ML1; '*' > state1cmt_ML2;
+
+state2cmt:
+	$ELSECOMMENT > state2cmt_L; '*' > state2cmt_ML1; $NL > state3;
+state2cmt_L:
+	$COMMENT > state2cmt_L; $NL > state3;
+state2cmt_ML1:
+	$MLCOMMENT > state2cmt_ML1; '*' > state2cmt_ML2;
+state2cmt_ML2:
+	'#' > state3; $MLRETRY > state2cmt_ML1; '*' > state2cmt_ML2;
+
+# CORE STATES
+#############
+#
+# The nitty gritty:
+#
+# sym1: + first character of a state name
+#       + first character of a variable name definition
+#       + first character of a directive name
+#       + symbol starting out a transition statement
+#       + transition variable reference indicator ($)
+#       + epsilon (aka empty string or lambda) transition
+#
+# sym2: + count remaining state name characters at sym4
+#       + beginning of list of transition symbols (,)
+#       + single-character variable name definition
+#       + single-character state name
+#       + single-character transition symbol 'list'
+#       + quoted transition symbol
+#
+# sym3: + space-eater for sym2; once sym2
+#         sees a space, sym3 simply waits for
+#         an operator symbol to know what's next
+#      
+# sym4: + state, variable definition names > length 2
+#
+# sym5: + 'space eater' for sym 4;
+########################################################
+
+ELSEDIGIT = $ELSECHAR \ $DIGIT,'-';
+
+sym1:
+#	$SPACE > sym1; $ELSECHAR > sym2; ''' > symquote1; '>' > dest1;
+	$SPACE > sym1; $ELSEDIGIT > sym2; $DIGIT,'-' > sym1_dig; ''' > symquote1; '>' > dest1;
+	s > start1; f > final1; r > reject1; b > blkbnd1;
+	'#' > sym1cmt; '$' > varref1;
+sym2:
+	$SPACE > sym3; $CHAR > sym4; ':' > sym1; ',' > symlist1; '>' > dest1;
+	'#' > sym2cmt; '=' > vardef1;
+sym3:
+	$SPACE > sym3; ':' > sym1; ',' > symlist1; '>' > dest1;
+	'#' > sym2cmt; '=' > vardef1;
+sym4:
+	$CHAR > sym4; $SPACE > sym5; ':' > sym1;
+	'#' > sym4cmt; '=' > vardef1;
+sym5:
+	$SPACE > sym5; ':' > sym1; 
+	'#' > sym4cmt; '=' > vardef1;
+
+sym1_dig:
+	$SPACE > sym2; $DIGIT > sym1_dig; $ELSEDIGIT,'-' > sym4; 
+	':' > sym1; ',' > symlist1; '>' > dest1; '=' > vardef1;
+	'#' > sym2_dig_cmt;
+
+sym2_dig_cmt:
+	$ELSECOMMENT > sym2_dig_cmt_L; '*' > sym2_dig_cmt_ML1; $NL > sym2;
+sym2_dig_cmt_L:
+	$COMMENT > sym2_dig_cmt_L; $NL > sym2;
+sym2_dig_cmt_ML1:
+	$MLCOMMENT > sym2_dig_cmt_ML1; '*' > sym2_dig_cmt_ML2;
+sym2_dig_cmt_ML2:
+	'#' > sym2; $MLRETRY > sym2_dig_cmt_ML1; '*' > sym2_dig_cmt_ML2;
+
+sym1cmt:
+	$ELSECOMMENT > sym1cmt_L; '*' > sym1cmt_ML1; $NL > sym1;
+sym1cmt_L:
+	$COMMENT > sym1cmt_L; $NL > sym1;
+sym1cmt_ML1:
+	$MLCOMMENT > sym1cmt_ML1; '*' > sym1cmt_ML2;
+sym1cmt_ML2:
+	'#' > sym1; $MLRETRY > sym1cmt_ML1; '*' > sym1cmt_ML2;
+
+sym2cmt:
+	$ELSECOMMENT > sym2cmt_L; '*' > sym2cmt_ML1; $NL > sym3;
+sym2cmt_L:
+	$COMMENT > sym2cmt_L; $NL > sym3;
+sym2cmt_ML1:
+	$MLCOMMENT > sym2cmt_ML1; '*' > sym2cmt_ML2;
+sym2cmt_ML2:
+	'#' > sym3; $MLRETRY > sym2cmt_ML1; '*' > sym2cmt_ML2;
+
+sym4cmt:
+	$ELSECOMMENT > sym4cmt_L; '*' > sym4cmt_ML1; $NL > sym5;
+sym4cmt_L:
+	$COMMENT > sym4cmt_L; $NL > sym5;
+sym4cmt_ML1:
+	$MLCOMMENT > sym4cmt_ML1; '*' > sym4cmt_ML2;
+sym4cmt_ML2:
+	'#' > sym5; $MLRETRY > sym4cmt_ML1; '*' > sym4cmt_ML2;
+
+# char within single quotes
+############################
+symquote1:
+	$ANY > symquote2;
+symquote2:
+	''' > symlist2;
+
+# multiple chars listed by comma
+# > prevent trailing comma
+# > epsilon trans may not be part of a list
+#############################################
+
+ELSEDIGIT = $CHAR \ $DIGIT,'-';
+
+symlist1:
+#	$SPACE > symlist1; $CHAR > symlist2; ''' > symquote1;
+	$SPACE > symlist1; $ELSEDIGIT > symlist2; $DIGIT,'-' > symlist1_dig; ''' > symquote1;
+	'#' > symlist1cmt; '$' > varref1;
+symlist2:
+	$SPACE > symlist2; ',' > symlist1; '>' > dest1;
+	'#' > symlist2cmt;
+
+symlist1_dig:
+	$SPACE > symlist2; $DIGIT > symlist1_dig; ',' > symlist1; '>' > dest1;
+	'#' > symlist1_dig_cmt;
+
+symlist1_dig_cmt:
+	$ELSECOMMENT > symlist1_dig_cmt_L; '*' > symlist1_dig_cmt_ML1; $NL > symlist2;
+symlist1_dig_cmt_L:
+	$COMMENT > symlist1_dig_cmt_L; $NL > symlist2;
+symlist1_dig_cmt_ML1:
+	$MLCOMMENT > symlist1_dig_cmt_ML1; '*' > symlist1_dig_cmt_ML2;
+symlist1_dig_cmt_ML2:
+	'#' > symlist2; $MLRETRY > symlist1_dig_cmt_ML1; '*' > symlist1_dig_cmt_ML2;
+
+symlist1cmt:
+	$ELSECOMMENT > symlist1cmt_L; '*' > symlist1cmt_ML1; $NL > symlist1;
+symlist1cmt_L:
+	$COMMENT > symlist1cmt_L; $NL > symlist1;
+symlist1cmt_ML1:
+	$MLCOMMENT > symlist1cmt_ML1; '*' > symlist1cmt_ML2;
+symlist1cmt_ML2:
+	'#' > symlist1; $MLRETRY > symlist1cmt_ML1; '*' > symlist1cmt_ML2;
+
+symlist2cmt:
+	$ELSECOMMENT > symlist2cmt_L; '*' > symlist2cmt_ML1; $NL > symlist2;
+symlist2cmt_L:
+	$COMMENT > symlist2cmt_L; $NL > symlist2;
+symlist2cmt_ML1:
+	$MLCOMMENT > symlist2cmt_ML1; '*' > symlist2cmt_ML2;
+symlist2cmt_ML2:
+	'#' > symlist2; $MLRETRY > symlist2cmt_ML1; '*' > symlist2cmt_ML2;
+
+# variable references within transitions
+# > always start with $, like shells
+#   ie. $STUFF > q0;
+########################################
+varref1:
+	$CHAR > varref2;
+varref2:
+	$CHAR > varref2; $SPACE > varref3; ',' > symlist1; '>' > dest1;
+	'#' > varref2cmt;
+varref3:
+	$SPACE > varref3; ',' > symlist1; '>' > dest1;
+	'#' > varref2cmt;
+
+varref2cmt:
+	$ELSECOMMENT > varref2cmt_L; '*' > varref2cmt_ML1; $NL > varref3;
+varref2cmt_L:
+	$COMMENT > varref2cmt_L; $NL > varref3;
+varref2cmt_ML1:
+	$MLCOMMENT > varref2cmt_ML1; '*' > varref2cmt_ML2;
+varref2cmt_ML2:
+	'#' > varref3; $MLRETRY > varref2cmt_ML1; '*' > varref2cmt_ML2;
+
+# destination state(s)
+# > single state names or a list of
+#   state names following the 
+#   'greater than' or 'go to' > operator
+#########################################
+dest1:
+	$SPACE > dest1; $CHAR > dest2;
+	'#' > dest1cmt;
+dest2:
+	$SPACE > dest3; $CHAR > dest2; ',' > destlist1; ';' > sym1; '(' > ext_begin;
+	'#' > dest2cmt;
+dest3:
+	$SPACE > dest3; ',' > destlist1; ';' > sym1; '(' > ext_begin;
+	'#' > dest2cmt;
+
+dest1cmt:
+	$ELSECOMMENT > dest1cmt_L; '*' > dest1cmt_ML1; $NL > dest1;
+dest1cmt_L:
+	$COMMENT > dest1cmt_L; $NL > dest1;
+dest1cmt_ML1:
+	$MLCOMMENT > dest1cmt_ML1; '*' > dest1cmt_ML2;
+dest1cmt_ML2:
+	'#' > dest1; $MLRETRY > dest1cmt_ML1; '*' > dest1cmt_ML2;
+
+dest2cmt:
+	$ELSECOMMENT > dest2cmt_L; '*' > dest2cmt_ML1; $NL > dest3;
+dest2cmt_L:
+	$COMMENT > dest2cmt_L; $NL > dest3;
+dest2cmt_ML1:
+	$MLCOMMENT > dest2cmt_ML1; '*' > dest2cmt_ML2;
+dest2cmt_ML2:
+	'#' > dest3; $MLRETRY > dest2cmt_ML1; '*' > dest2cmt_ML2;
+
+# list of destination states
+#############################
+destlist1:
+	$SPACE > destlist1; $CHAR > destlist2;
+	'#' > destlist1cmt;
+destlist2:
+	$SPACE > destlist3; $CHAR > destlist2; ',' > destlist1; ';' > sym1; '(' > ext_begin;
+	'#' > destlist2cmt;
+destlist3:
+	$SPACE > destlist3; ',' > destlist1; ';' > sym1; '(' > ext_begin;
+	'#' > destlist2cmt;
+
+destlist1cmt:
+	$ELSECOMMENT > destlist1cmt_L; '*' > destlist1cmt_ML1; $NL > destlist1;
+destlist1cmt_L:
+	$COMMENT > destlist1cmt_L; $NL > destlist1;
+destlist1cmt_ML1:
+	$MLCOMMENT > destlist1cmt_ML1; '*' > destlist1cmt_ML2;
+destlist1cmt_ML2:
+	'#' > destlist1; $MLRETRY > destlist1cmt_ML1; '*' > destlist1cmt_ML2;
+
+destlist2cmt:
+	$ELSECOMMENT > destlist2cmt_L; '*' > destlist2cmt_ML1; $NL > destlist3;
+destlist2cmt_L:
+	$COMMENT > destlist2cmt_L; $NL > destlist3;
+destlist2cmt_ML1:
+	$MLCOMMENT > destlist2cmt_ML1; '*' > destlist2cmt_ML2;
+destlist2cmt_ML2:
+	'#' > destlist3; $MLRETRY > destlist2cmt_ML1; '*' > destlist2cmt_ML2;
+
+# extended operations
+# read (push), write (pop), & direction symbols for PDA/TM
+# > push and dir may be listed together
+# > pop may not be listed with push or dir
+#   (maybe they should be allowed to, though :P )
+# > push and pop syms may be single-quoted (>'x'), ('y'>), ('y'>'x')
+####################################################################
+####################################################################
+ext_begin:
+#	$SPACE > ext_begin; '>' > push1; $RW > pop1; ''' > popquote1; $DIR > dir1;
+	$SPACE > ext_begin; '>' > ext10; $RW > ext2; $DIGIT,'-' > ext_begin_dig; $DIR > ext14;
+	''' > ext_begin_quote1; '#' > ext_begin_cmt;
+ext_begin_dig:
+	$SPACE > ext2; $DIGIT > ext_begin_dig; ')' > ext_end; ',' > ext3; '>' > ext8;
+	'#' > ext_begin_dig_cmt;
+ext_begin_quote1:
+	$ANY > ext_begin_quote2;
+ext_begin_quote2:
+	''' > ext2;
+
+ext_end:
+	$SPACE > ext_end; ',' > destlist1; ';' > sym1;
+	'#' > ext_end_cmt;
+
+ext_begin_dig_cmt:
+	$ELSECOMMENT > ext_begin_dig_cmt_L; '*' > ext_begin_dig_cmt_ML1; $NL > ext2;
+ext_begin_dig_cmt_L:
+	$COMMENT > ext_begin_dig_cmt_L; $NL > ext2;
+ext_begin_dig_cmt_ML1:
+	$MLCOMMENT > ext_begin_dig_cmt_ML1; '*' > ext_begin_dig_cmt_ML2;
+ext_begin_dig_cmt_ML2:
+	'#' > ext2; $MLRETRY > ext_begin_dig_cmt_ML1; '*' > ext_begin_dig_cmt_ML2;
+
+ext_begin_cmt:
+	$ELSECOMMENT > ext_begin_cmt_L; '*' > ext_begin_cmt_ML1; $NL > ext_begin;
+ext_begin_cmt_L:
+	$COMMENT > ext_begin_cmt_L; $NL > ext_begin;
+ext_begin_cmt_ML1:
+	$MLCOMMENT > ext_begin_cmt_ML1; '*' > ext_begin_cmt_ML2;
+ext_begin_cmt_ML2:
+	'#' > ext_begin; $MLRETRY > ext_begin_cmt_ML1; '*' > ext_begin_cmt_ML2;
+
+ext_end_cmt:
+	$ELSECOMMENT > ext_end_cmt_L; '*' > ext_end_cmt_ML1; $NL > ext_end;
+ext_end_cmt_L:
+	$COMMENT > ext_end_cmt_L; $NL > ext_end;
+ext_end_cmt_ML1:
+	$MLCOMMENT > ext_end_cmt_ML1; '*' > ext_end_cmt_ML2;
+ext_end_cmt_ML2:
+	'#' > ext_end; $MLRETRY > ext_end_cmt_ML1; '*' > ext_end_cmt_ML2;
+
+ext2:
+	$SPACE > ext2; ')' > ext_end; ',' > ext3; '>' > ext8;
+	'#' > ext2_cmt;
+
+ext2_cmt:
+	$ELSECOMMENT > ext2_cmt_L; '*' > ext2_cmt_ML1; $NL > ext2;
+ext2_cmt_L:
+	$COMMENT > ext2_cmt_L; $NL > ext2;
+ext2_cmt_ML1:
+	$MLCOMMENT > ext2_cmt_ML1; '*' > ext2_cmt_ML2;
+ext2_cmt_ML2:
+	'#' > ext2; $MLRETRY > ext2_cmt_ML1; '*' > ext2_cmt_ML2;
+
+ext3:
+	$SPACE > ext3; $RW > ext4; $DIGIT,'-' > ext3_dig; $DIR > ext6; '>' > ext27;
+	''' > ext3_quote1; '#' > ext3_cmt; 
+ext3_dig:
+	$SPACE > ext4; $DIGIT > ext3_dig; '>' > ext5;
+	'#' > ext3_dig_cmt;
+ext3_quote1:
+	$ANY > ext3_quote2;
+ext3_quote2:
+	''' > ext4;
+
+ext3_cmt:
+	$ELSECOMMENT > ext3_cmt_L; '*' > ext3_cmt_ML1; $NL > ext3;
+ext3_cmt_L:
+	$COMMENT > ext3_cmt_L; $NL > ext3;
+ext3_cmt_ML1:
+	$MLCOMMENT > ext3_cmt_ML1; '*' > ext3_cmt_ML2;
+ext3_cmt_ML2:
+	'#' > ext3; $MLRETRY > ext3_cmt_ML1; '*' > ext3_cmt_ML2;
+
+ext3_dig_cmt:
+	$ELSECOMMENT > ext3_dig_cmt_L; '*' > ext3_dig_cmt_ML1; $NL > ext4;
+ext3_dig_cmt_L:
+	$COMMENT > ext3_dig_cmt_L; $NL > ext4;
+ext3_dig_cmt_ML1:
+	$MLCOMMENT > ext3_dig_cmt_ML1; '*' > ext3_dig_cmt_ML2;
+ext3_dig_cmt_ML2:
+	'#' > ext4; $MLRETRY > ext3_dig_cmt_ML1; '*' > ext3_dig_cmt_ML2;
+
+ext4:
+	$SPACE > ext4; '>' > ext5;
+	'#' > ext4_cmt;
+
+ext4_cmt:
+	$ELSECOMMENT > ext4_cmt_L; '*' > ext4_cmt_ML1; $NL > ext4;
+ext4_cmt_L:
+	$COMMENT > ext4_cmt_L; $NL > ext4;
+ext4_cmt_ML1:
+	$MLCOMMENT > ext4_cmt_ML1; '*' > ext4_cmt_ML2;
+ext4_cmt_ML2:
+	'#' > ext4; $MLRETRY > ext4_cmt_ML1; '*' > ext4_cmt_ML2;
+
+ext5:
+	$SPACE > ext5; ')' > ext_end; $ELSEDIGIT > ext7; $DIGIT,'-' > ext5_dig; ',' > ext9;
+	''' > ext5_quote1; '#' > ext5_cmt;
+ext5_dig:
+	$SPACE > ext7; $DIGIT > ext5_dig; ')' > ext_end; ',' > ext9;
+	'#' > ext5_dig_cmt;
+ext5_quote1:
+	$ANY > ext5_quote2;
+ext5_quote2:
+	''' > ext7;
+
+ext5_cmt:
+	$ELSECOMMENT > ext5_cmt_L; '*' > ext5_cmt_ML1; $NL > ext5;
+ext5_cmt_L:
+	$COMMENT > ext5_cmt_L; $NL > ext5;
+ext5_cmt_ML1:
+	$MLCOMMENT > ext5_cmt_ML1; '*' > ext5_cmt_ML2;
+ext5_cmt_ML2:
+	'#' > ext5; $MLRETRY > ext5_cmt_ML1; '*' > ext5_cmt_ML2;
+
+ext5_dig_cmt:
+	$ELSECOMMENT > ext5_dig_cmt_L; '*' > ext5_dig_cmt_ML1; $NL > ext7;
+ext5_dig_cmt_L:
+	$COMMENT > ext5_dig_cmt_L; $NL > ext7;
+ext5_dig_cmt_ML1:
+	$MLCOMMENT > ext5_dig_cmt_ML1; '*' > ext5_dig_cmt_ML2;
+ext5_dig_cmt_ML2:
+	'#' > ext7; $MLRETRY > ext5_dig_cmt_ML1; '*' > ext5_dig_cmt_ML2;
+
+ext6:
+	$SPACE > ext6; '>' > ext5; ')' > ext_end; ',' > ext17;
+	'#' > ext6_cmt;
+
+ext6_cmt:
+	$ELSECOMMENT > ext6_cmt_L; '*' > ext6_cmt_ML1; $NL > ext6;
+ext6_cmt_L:
+	$COMMENT > ext6_cmt_L; $NL > ext6;
+ext6_cmt_ML1:
+	$MLCOMMENT > ext6_cmt_ML1; '*' > ext6_cmt_ML2;
+ext6_cmt_ML2:
+	'#' > ext6; $MLRETRY > ext6_cmt_ML1; '*' > ext6_cmt_ML2;
+
+ext7:
+	$SPACE > ext7; ')' > ext_end; ',' > ext9;
+	'#' > ext7_cmt;
+
+ext7_cmt:
+	$ELSECOMMENT > ext7_cmt_L; '*' > ext7_cmt_ML1; $NL > ext7;
+ext7_cmt_L:
+	$COMMENT > ext7_cmt_L; $NL > ext7;
+ext7_cmt_ML1:
+	$MLCOMMENT > ext7_cmt_ML1; '*' > ext7_cmt_ML2;
+ext7_cmt_ML2:
+	'#' > ext7; $MLRETRY > ext7_cmt_ML1; '*' > ext7_cmt_ML2;
+
+ext8:
+	$SPACE > ext8; $ELSEDIGIT > ext11; $DIGIT,'-' > ext8_dig; ',' > ext12; ')' > ext_end;
+	''' > ext8_quote1; '#' > ext8_dig;
+ext8_dig:
+	$SPACE > ext11; $DIGIT > ext8_dig; ')' > ext_end; ',' > ext12;
+	'#' > ext8_dig_cmt;
+ext8_quote1:
+	$ANY > ext8_quote2;
+ext8_quote2:
+	''' > ext11;
+
+ext8_cmt:
+	$ELSECOMMENT > ext8_cmt_L; '*' > ext8_cmt_ML1; $NL > ext8;
+ext8_cmt_L:
+	$COMMENT > ext8_cmt_L; $NL > ext8;
+ext8_cmt_ML1:
+	$MLCOMMENT > ext8_cmt_ML1; '*' > ext8_cmt_ML2;
+ext8_cmt_ML2:
+	'#' > ext8; $MLRETRY > ext8_cmt_ML1; '*' > ext8_cmt_ML2;
+
+ext8_dig_cmt:
+	$ELSECOMMENT > ext8_dig_cmt_L; '*' > ext8_dig_cmt_ML1; $NL > ext11;
+ext8_dig_cmt_L:
+	$COMMENT > ext8_dig_cmt_L; $NL > ext11;
+ext8_dig_cmt_ML1:
+	$MLCOMMENT > ext8_dig_cmt_ML1; '*' > ext8_dig_cmt_ML2;
+ext8_dig_cmt_ML2:
+	'#' > ext11; $MLRETRY > ext8_dig_cmt_ML1; '*' > ext8_dig_cmt_ML2;
+
+ext9:
+	$SPACE > ext9; $DIR > ext18; 
+	'#' > ext9_cmt;
+
+ext9_cmt:
+	$ELSECOMMENT > ext9_cmt_L; '*' > ext9_cmt_ML1; $NL > ext9;
+ext9_cmt_L:
+	$COMMENT > ext9_cmt_L; $NL > ext9;
+ext9_cmt_ML1:
+	$MLCOMMENT > ext9_cmt_ML1; '*' > ext9_cmt_ML2;
+ext9_cmt_ML2:
+	'#' > ext9; $MLRETRY > ext9_cmt_ML1; '*' > ext9_cmt_ML2;
+
+ext10:
+	$SPACE > ext10; $ELSEDIGIT > ext11; $DIGIT,'-' > ext10_dig;
+	''' > ext10_quote1; '#' > ext10_cmt;
+ext10_dig:
+	$SPACE > ext11; $DIGIT > ext10_dig; ')' > ext_end; ',' > ext12;
+	'#' > ext10_dig_cmt;
+ext10_quote1:
+	$ANY > ext10_quote2;
+ext10_quote2:
+	''' > ext11;
+
+ext10_cmt:
+	$ELSECOMMENT > ext10_cmt_L; '*' > ext10_cmt_ML1; $NL > ext10;
+ext10_cmt_L:
+	$COMMENT > ext10_cmt_L; $NL > ext10;
+ext10_cmt_ML1:
+	$MLCOMMENT > ext10_cmt_ML1; '*' > ext10_cmt_ML2;
+ext10_cmt_ML2:
+	'#' > ext10; $MLRETRY > ext10_cmt_ML1; '*' > ext10_cmt_ML2;
+
+ext10_dig_cmt:
+	$ELSECOMMENT > ext10_dig_cmt_L; '*' > ext10_dig_cmt_ML1; $NL > ext11;
+ext10_dig_cmt_L:
+	$COMMENT > ext10_dig_cmt_L; $NL > ext11;
+ext10_dig_cmt_ML1:
+	$MLCOMMENT > ext10_dig_cmt_ML1; '*' > ext10_dig_cmt_ML2;
+ext10_dig_cmt_ML2:
+	'#' > ext11; $MLRETRY > ext10_dig_cmt_ML1; '*' > ext10_dig_cmt_ML2;
+
+ext11:
+	$SPACE > ext11; ')' > ext_end; ',' > ext12;
+	'#' > ext11_cmt;
+
+ext11_cmt:
+	$ELSECOMMENT > ext11_cmt_L; '*' > ext11_cmt_ML1; $NL > ext11;
+ext11_cmt_L:
+	$COMMENT > ext11_cmt_L; $NL > ext11;
+ext11_cmt_ML1:
+	$MLCOMMENT > ext11_cmt_ML1; '*' > ext11_cmt_ML2;
+ext11_cmt_ML2:
+	'#' > ext11; $MLRETRY > ext11_cmt_ML1; '*' > ext11_cmt_ML2;
+
+ext12:
+	$SPACE > ext12; $RW > ext13; $DIGIT,'-' > ext12_dig; $DIR > ext21;
+	''' > ext12_quote1; '#' > ext12_cmt;
+ext12_dig:
+	$SPACE > ext13; $DIGIT > ext12_dig; ')' > ext_end; ',' > ext9;
+	'#' > ext12_dig_cmt;
+ext12_quote1:
+	$ANY > ext12_quote2;
+ext12_quote2:
+	''' > ext13;
+
+ext12_cmt:
+	$ELSECOMMENT > ext12_cmt_L; '*' > ext12_cmt_ML1; $NL > ext12;
+ext12_cmt_L:
+	$COMMENT > ext12_cmt_L; $NL > ext12;
+ext12_cmt_ML1:
+	$MLCOMMENT > ext12_cmt_ML1; '*' > ext12_cmt_ML2;
+ext12_cmt_ML2:
+	'#' > ext12; $MLRETRY > ext12_cmt_ML1; '*' > ext12_cmt_ML2;
+
+ext12_dig_cmt:
+	$ELSECOMMENT > ext12_dig_cmt_L; '*' > ext12_dig_cmt_ML1; $NL > ext13;
+ext12_dig_cmt_L:
+	$COMMENT > ext12_dig_cmt_L; $NL > ext13;
+ext12_dig_cmt_ML1:
+	$MLCOMMENT > ext12_dig_cmt_ML1; '*' > ext12_dig_cmt_ML2;
+ext12_dig_cmt_ML2:
+	'#' > ext13; $MLRETRY > ext12_dig_cmt_ML1; '*' > ext12_dig_cmt_ML2;
+
+ext13:
+	$SPACE > ext13; ')' > ext_end; ',' > ext9;
+	'#' > ext13_cmt;
+
+ext13_cmt:
+	$ELSECOMMENT > ext13_cmt_L; '*' > ext13_cmt_ML1; $NL > ext13;
+ext13_cmt_L:
+	$COMMENT > ext13_cmt_L; $NL > ext13;
+ext13_cmt_ML1:
+	$MLCOMMENT > ext13_cmt_ML1; '*' > ext13_cmt_ML2;
+ext13_cmt_ML2:
+	'#' > ext13; $MLRETRY > ext13_cmt_ML1; '*' > ext13_cmt_ML2;
+
+ext14:
+	$SPACE > ext14; '>' > ext8; ')' > ext_end; ',' > ext15;
+	'#' > ext14_cmt;
+
+ext14_cmt:
+	$ELSECOMMENT > ext14_cmt_L; '*' > ext14_cmt_ML1; $NL > ext14;
+ext14_cmt_L:
+	$COMMENT > ext14_cmt_L; $NL > ext14;
+ext14_cmt_ML1:
+	$MLCOMMENT > ext14_cmt_ML1; '*' > ext14_cmt_ML2;
+ext14_cmt_ML2:
+	'#' > ext14; $MLRETRY > ext14_cmt_ML1; '*' > ext14_cmt_ML2;
+
+ext15:
+	$SPACE > ext15; $ELSEDIGIT > ext16; $DIGIT,'-' > ext15_dig; '>' > ext25;
+	''' > ext15_quote1; '#' > ext15_cmt;
+ext15_dig:
+	$SPACE > ext16; $DIGIT > ext15_dig; ')' > ext_end; ',' > ext17; '>' > ext22;
+	'#' > ext15_dig_cmt;
+ext15_quote1:
+	$ANY > ext15_quote2;
+ext15_quote2:
+	''' > ext16;
+
+ext15_cmt:
+	$ELSECOMMENT > ext15_cmt_L; '*' > ext15_cmt_ML1; $NL > ext15;
+ext15_cmt_L:
+	$COMMENT > ext15_cmt_L; $NL > ext15;
+ext15_cmt_ML1:
+	$MLCOMMENT > ext15_cmt_ML1; '*' > ext15_cmt_ML2;
+ext15_cmt_ML2:
+	'#' > ext15; $MLRETRY > ext15_cmt_ML1; '*' > ext15_cmt_ML2;
+
+ext15_dig_cmt:
+	$ELSECOMMENT > ext15_dig_cmt_L; '*' > ext15_dig_cmt_ML1; $NL > ext16;
+ext15_dig_cmt_L:
+	$COMMENT > ext15_dig_cmt_L; $NL > ext16;
+ext15_dig_cmt_ML1:
+	$MLCOMMENT > ext15_dig_cmt_ML1; '*' > ext15_dig_cmt_ML2;
+ext15_dig_cmt_ML2:
+	'#' > ext16; $MLRETRY > ext15_dig_cmt_ML1; '*' > ext15_dig_cmt_ML2;
+
+ext16:
+	$SPACE > ext16; ')' > ext_end; ',' > ext17; '>' > ext22;
+	'#' > ext16_cmt;
+
+ext16_cmt:
+	$ELSECOMMENT > ext16_cmt_L; '*' > ext16_cmt_ML1; $NL > ext16;
+ext16_cmt_L:
+	$COMMENT > ext16_cmt_L; $NL > ext16;
+ext16_cmt_ML1:
+	$MLCOMMENT > ext16_cmt_ML1; '*' > ext16_cmt_ML2;
+ext16_cmt_ML2:
+	'#' > ext16; $MLRETRY > ext16_cmt_ML1; '*' > ext16_cmt_ML2;
+
+ext17:
+	$SPACE > ext17; $ELSEDIGIT > ext19; $DIGIT,'-' > ext17_dig; '>' > ext24;
+	''' > ext17_quote1; '#' > ext17_cmt;
+ext17_dig:
+	$SPACE > ext19; $DIGIT > ext17_dig; '>' > ext20;
+	'#' > ext17_dig_cmt;
+ext17_quote1:
+	$ANY > ext17_quote2;
+ext17_quote2:
+	''' > ext19;
+
+ext17_cmt:
+	$ELSECOMMENT > ext17_cmt_L; '*' > ext17_cmt_ML1; $NL > ext17;
+ext17_cmt_L:
+	$COMMENT > ext17_cmt_L; $NL > ext17;
+ext17_cmt_ML1:
+	$MLCOMMENT > ext17_cmt_ML1; '*' > ext17_cmt_ML2;
+ext17_cmt_ML2:
+	'#' > ext17; $MLRETRY > ext17_cmt_ML1; '*' > ext17_cmt_ML2;
+
+ext17_dig_cmt:
+	$ELSECOMMENT > ext17_dig_cmt_L; '*' > ext17_dig_cmt_ML1; $NL > ext19;
+ext17_dig_cmt_L:
+	$COMMENT > ext17_dig_cmt_L; $NL > ext19;
+ext17_dig_cmt_ML1:
+	$MLCOMMENT > ext17_dig_cmt_ML1; '*' > ext17_dig_cmt_ML2;
+ext17_dig_cmt_ML2:
+	'#' > ext19; $MLRETRY > ext17_dig_cmt_ML1; '*' > ext17_dig_cmt_ML2;
+
+ext18:
+	$SPACE > ext18; ')' > ext_end;
+	'#' > ext18_cmt;
+
+ext18_cmt:
+	$ELSECOMMENT > ext18_cmt_L; '*' > ext18_cmt_ML1; $NL > ext18;
+ext18_cmt_L:
+	$COMMENT > ext18_cmt_L; $NL > ext18;
+ext18_cmt_ML1:
+	$MLCOMMENT > ext18_cmt_ML1; '*' > ext18_cmt_ML2;
+ext18_cmt_ML2:
+	'#' > ext18; $MLRETRY > ext18_cmt_ML1; '*' > ext18_cmt_ML2;
+
+ext19:
+	$SPACE > ext19; '>' > ext20;
+	'#' > ext19_cmt;
+
+ext19_cmt:
+	$ELSECOMMENT > ext19_cmt_L; '*' > ext19_cmt_ML1; $NL > ext19;
+ext19_cmt_L:
+	$COMMENT > ext19_cmt_L; $NL > ext19;
+ext19_cmt_ML1:
+	$MLCOMMENT > ext19_cmt_ML1; '*' > ext19_cmt_ML2;
+ext19_cmt_ML2:
+	'#' > ext19; $MLRETRY > ext19_cmt_ML1; '*' > ext19_cmt_ML2;
+
+ext20:
+	$SPACE > ext20; $ELSEDIGIT > ext18; $DIGIT,'-' > ext20_dig; ')' > ext_end;
+	''' > ext20_quote1; '#' > ext20_cmt;
+ext20_dig:
+	$SPACE > ext18; $DIGIT > ext20_dig; ')' > ext_end;
+	'#' > ext20_dig_cmt;
+ext20_quote1:
+	$ANY > ext20_quote2;
+ext20_quote2:
+	''' > ext18;
+
+ext20_cmt:
+	$ELSECOMMENT > ext20_cmt_L; '*' > ext20_cmt_ML1; $NL > ext20;
+ext20_cmt_L:
+	$COMMENT > ext20_cmt_L; $NL > ext20;
+ext20_cmt_ML1:
+	$MLCOMMENT > ext20_cmt_ML1; '*' > ext20_cmt_ML2;
+ext20_cmt_ML2:
+	'#' > ext20; $MLRETRY > ext20_cmt_ML1; '*' > ext20_cmt_ML2;
+
+ext20_dig_cmt:
+	$ELSECOMMENT > ext20_dig_cmt_L; '*' > ext20_dig_cmt_ML1; $NL > ext18;
+ext20_dig_cmt_L:
+	$COMMENT > ext20_dig_cmt_L; $NL > ext18;
+ext20_dig_cmt_ML1:
+	$MLCOMMENT > ext20_dig_cmt_ML1; '*' > ext20_dig_cmt_ML2;
+ext20_dig_cmt_ML2:
+	'#' > ext18; $MLRETRY > ext20_dig_cmt_ML1; '*' > ext20_dig_cmt_ML2;
+
+ext21:
+	$SPACE > ext21; ')' > ext_end; ',' > ext24;
+	'#' > ext21_cmt;
+
+ext21_cmt:
+	$ELSECOMMENT > ext21_cmt_L; '*' > ext21_cmt_ML1; $NL > ext21;
+ext21_cmt_L:
+	$COMMENT > ext21_cmt_L; $NL > ext21;
+ext21_cmt_ML1:
+	$MLCOMMENT > ext21_cmt_ML1; '*' > ext21_cmt_ML2;
+ext21_cmt_ML2:
+	'#' > ext21; $MLRETRY > ext21_cmt_ML1; '*' > ext21_cmt_ML2;
+
+ext22:
+	$SPACE > ext22; $ELSEDIGIT > ext23; $DIGIT,'-' > ext22_dig; ')' > ext_end; ',' > ext24;
+	''' > ext22_quote1; '#' > ext22_cmt;
+ext22_dig:
+	$SPACE > ext23; $DIGIT > ext22_dig; ')' > ext_end; ',' > ext24;
+	'#' > ext22_dig_cmt;
+ext22_quote1:
+	$ANY > ext22_quote2;
+ext22_quote2:
+	''' > ext23;
+
+ext22_cmt:
+	$ELSECOMMENT > ext22_cmt_L; '*' > ext22_cmt_ML1; $NL > ext22;
+ext22_cmt_L:
+	$COMMENT > ext22_cmt_L; $NL > ext22;
+ext22_cmt_ML1:
+	$MLCOMMENT > ext22_cmt_ML1; '*' > ext22_cmt_ML2;
+ext22_cmt_ML2:
+	'#' > ext22; $MLRETRY > ext22_cmt_ML1; '*' > ext22_cmt_ML2;
+
+ext22_dig_cmt:
+	$ELSECOMMENT > ext22_dig_cmt_L; '*' > ext22_dig_cmt_ML1; $NL > ext23;
+ext22_dig_cmt_L:
+	$COMMENT > ext22_dig_cmt_L; $NL > ext23;
+ext22_dig_cmt_ML1:
+	$MLCOMMENT > ext22_dig_cmt_ML1; '*' > ext22_dig_cmt_ML2;
+ext22_dig_cmt_ML2:
+	'#' > ext23; $MLRETRY > ext22_dig_cmt_ML1; '*' > ext22_dig_cmt_ML2;
+
+ext23:
+	$SPACE > ext23; ')' > ext_end; ',' > ext24;
+	'#' > ext23_cmt;
+
+ext23_cmt:
+	$ELSECOMMENT > ext23_cmt_L; '*' > ext23_cmt_ML1; $NL > ext23;
+ext23_cmt_L:
+	$COMMENT > ext23_cmt_L; $NL > ext23;
+ext23_cmt_ML1:
+	$MLCOMMENT > ext23_cmt_ML1; '*' > ext23_cmt_ML2;
+ext23_cmt_ML2:
+	'#' > ext23; $MLRETRY > ext23_cmt_ML1; '*' > ext23_cmt_ML2;
+
+ext24:
+	$SPACE > ext24; $ELSEDIGIT > ext18; $DIGIT,'-' > ext24_dig;
+	''' > ext24_quote1; '#' > ext24_cmt;
+ext24_dig:
+	$SPACE > ext18; $DIGIT > ext24_dig; ')' > ext_end;
+	'#' > ext24_dig_cmt;
+ext24_quote1:
+	$ANY > ext24_quote2;
+ext24_quote2:
+	''' > ext18;
+
+ext24_cmt:
+	$ELSECOMMENT > ext24_cmt_L; '*' > ext24_cmt_ML1; $NL > ext24;
+ext24_cmt_L:
+	$COMMENT > ext24_cmt_L; $NL > ext24;
+ext24_cmt_ML1:
+	$MLCOMMENT > ext24_cmt_ML1; '*' > ext24_cmt_ML2;
+ext24_cmt_ML2:
+	'#' > ext24; $MLRETRY > ext24_cmt_ML1; '*' > ext24_cmt_ML2;
+
+ext24_dig_cmt:
+	$ELSECOMMENT > ext24_dig_cmt_L; '*' > ext24_dig_cmt_ML1; $NL > ext18;
+ext24_dig_cmt_L:
+	$COMMENT > ext24_dig_cmt_L; $NL > ext18;
+ext24_dig_cmt_ML1:
+	$MLCOMMENT > ext24_dig_cmt_ML1; '*' > ext24_dig_cmt_ML2;
+ext24_dig_cmt_ML2:
+	'#' > ext18; $MLRETRY > ext24_dig_cmt_ML1; '*' > ext24_dig_cmt_ML2;
+
+ext25:
+	$SPACE > ext25; $ELSEDIGIT > ext26; $DIGIT,'-' > ext25_dig;
+	''' > ext25_quote1; '#' > ext25_cmt;
+ext25_dig:
+	$SPACE > ext26; $DIGIT > ext25_dig; ')' > ext_end; ',' > ext24;
+	'#' > ext25_dig_cmt;
+ext25_quote1:
+	$ANY > ext25_quote2;
+ext25_quote2:
+	''' > ext26;
+
+ext25_cmt:
+	$ELSECOMMENT > ext25_cmt_L; '*' > ext25_cmt_ML1; $NL > ext25;
+ext25_cmt_L:
+	$COMMENT > ext25_cmt_L; $NL > ext25;
+ext25_cmt_ML1:
+	$MLCOMMENT > ext25_cmt_ML1; '*' > ext25_cmt_ML2;
+ext25_cmt_ML2:
+	'#' > ext25; $MLRETRY > ext25_cmt_ML1; '*' > ext25_cmt_ML2;
+
+ext25_dig_cmt:
+	$ELSECOMMENT > ext25_dig_cmt_L; '*' > ext25_dig_cmt_ML1; $NL > ext26;
+ext25_dig_cmt_L:
+	$COMMENT > ext25_dig_cmt_L; $NL > ext26;
+ext25_dig_cmt_ML1:
+	$MLCOMMENT > ext25_dig_cmt_ML1; '*' > ext25_dig_cmt_ML2;
+ext25_dig_cmt_ML2:
+	'#' > ext26; $MLRETRY > ext25_dig_cmt_ML1; '*' > ext25_dig_cmt_ML2;
+
+ext26:
+	$SPACE > ext26; ')' > ext_end; ',' > ext24;
+	'#' > ext26_cmt;
+
+ext26_cmt:
+	$ELSECOMMENT > ext26_cmt_L; '*' > ext26_cmt_ML1; $NL > ext26;
+ext26_cmt_L:
+	$COMMENT > ext26_cmt_L; $NL > ext26;
+ext26_cmt_ML1:
+	$MLCOMMENT > ext26_cmt_ML1; '*' > ext26_cmt_ML2;
+ext26_cmt_ML2:
+	'#' > ext26; $MLRETRY > ext26_cmt_ML1; '*' > ext26_cmt_ML2;
+
+ext27:
+	$SPACE > ext27; $ELSEDIGIT > ext13; $DIGIT,'-' > ext27_dig;
+	''' > ext27_quote1; '#' > ext27_cmt;
+ext27_dig:
+	$SPACE > ext13; $DIGIT > ext27_dig; ',' > ext9; ')' > ext_end;
+	'#' > ext27_dig_cmt;
+ext27_quote1:
+	$ANY > ext27_quote2;
+ext27_quote2:
+	''' > ext13;
+
+ext27_cmt:
+	$ELSECOMMENT > ext27_cmt_L; '*' > ext27_cmt_ML1; $NL > ext27;
+ext27_cmt_L:
+	$COMMENT > ext27_cmt_L; $NL > ext27;
+ext27_cmt_ML1:
+	$MLCOMMENT > ext27_cmt_ML1; '*' > ext27_cmt_ML2;
+ext27_cmt_ML2:
+	'#' > ext27; $MLRETRY > ext27_cmt_ML1; '*' > ext27_cmt_ML2;
+
+ext27_dig_cmt:
+	$ELSECOMMENT > ext27_dig_cmt_L; '*' > ext27_dig_cmt_ML1; $NL > ext13;
+ext27_dig_cmt_L:
+	$COMMENT > ext27_dig_cmt_L; $NL > ext13;
+ext27_dig_cmt_ML1:
+	$MLCOMMENT > ext27_dig_cmt_ML1; '*' > ext27_dig_cmt_ML2;
+ext27_dig_cmt_ML2:
+	'#' > ext13; $MLRETRY > ext27_dig_cmt_ML1; '*' > ext27_dig_cmt_ML2;
+
+#*
+
+# push symbol: push is first following '('
+# then see if dir listed after ','
+##########################################
+push1:
+	$SPACE > push1; $CHAR > push2; ''' > pushquote1;
+	'#' > push1cmt;
+push2:
+	$SPACE > push2; ',' > push3; ')' > ext_end;
+	'#' > push2cmt;
+push3:
+	$SPACE > push3; $DIR > push4;
+	'#' > push3cmt;
+push4:
+	$SPACE > push4; ')' > ext_end;
+	'#' > push4cmt;
+
+push1cmt:
+	$ELSECOMMENT > push1cmt_L; '*' > push1cmt_ML1; $NL > push1;
+push1cmt_L:
+	$COMMENT > push1cmt_L; $NL > push1;
+push1cmt_ML1:
+	$MLCOMMENT > push1cmt_ML1; '*' > push1cmt_ML2;
+push1cmt_ML2:
+	'#' > push1; $MLRETRY > push1cmt_ML1;
+
+push2cmt:
+	$ELSECOMMENT > push2cmt_L; '*' > push2cmt_ML1; $NL > push2;
+push2cmt_L:
+	$COMMENT > push2cmt_L; $NL > push2;
+push2cmt_ML1:
+	$MLCOMMENT > push2cmt_ML1; '*' > push2cmt_ML2;
+push2cmt_ML2:
+	'#' > push2; $MLRETRY > push2cmt_ML1;
+
+push3cmt:
+	$ELSECOMMENT > push3cmt_L; '*' > push3cmt_ML1; $NL > push3;
+push3cmt_L:
+	$COMMENT > push3cmt_L; $NL > push3;
+push3cmt_ML1:
+	$MLCOMMENT > push3cmt_ML1; '*' > push3cmt_ML2;
+push3cmt_ML2:
+	'#' > push3; $MLRETRY > push3cmt_ML1;
+
+push4cmt:
+	$ELSECOMMENT > push4cmt_L; '*' > push4cmt_ML1; $NL > push4;
+push4cmt_L:
+	$COMMENT > push4cmt_L; $NL > push4;
+push4cmt_ML1:
+	$MLCOMMENT > push4cmt_ML1; '*' > push4cmt_ML2;
+push4cmt_ML2:
+	'#' > push4; $MLRETRY > push4cmt_ML1;
+
+# pop symbol: pop is first following '('
+# may be a combined push/pop (x>y)
+########################################
+pop1:
+	$SPACE > pop1; '>' > pop2;
+	'#' > pop1cmt;
+pop2:
+	$SPACE > pop2; $CHAR > pop3; ''' > poppushq1; ')' > ext_end;
+	'#' > pop2cmt;
+pop3:
+	$SPACE > pop3; ')' > ext_end;
+	'#' > pop3cmt;
+
+pop1cmt:
+	$ELSECOMMENT > pop1cmt_L; '*' > pop1cmt_ML1; $NL > pop1;
+pop1cmt_L:
+	$COMMENT > pop1cmt_L; $NL > pop1;
+pop1cmt_ML1:
+	$MLCOMMENT > pop1cmt_ML1; '*' > pop1cmt_ML2;
+pop1cmt_ML2:
+	'#' > pop1; $MLRETRY > pop1cmt_ML1;
+
+pop2cmt:
+	$ELSECOMMENT > pop2cmt_L; '*' > pop2cmt_ML1; $NL > pop2;
+pop2cmt_L:
+	$COMMENT > pop2cmt_L; $NL > pop2;
+pop2cmt_ML1:
+	$MLCOMMENT > pop2cmt_ML1; '*' > pop2cmt_ML2;
+pop2cmt_ML2:
+	'#' > pop2; $MLRETRY > pop2cmt_ML1;
+
+pop3cmt:
+	$ELSECOMMENT > pop3cmt_L; '*' > pop3cmt_ML1; $NL > pop3;
+pop3cmt_L:
+	$COMMENT > pop3cmt_L; $NL > pop3;
+pop3cmt_ML1:
+	$MLCOMMENT > pop3cmt_ML1; '*' > pop3cmt_ML2;
+pop3cmt_ML2:
+	'#' > pop3; $MLRETRY > pop3cmt_ML1;
+
+# dir symbol: direction is first following '('
+# > dir symbol could turn out to be an 'L' 
+#   or 'R' pop, so we check for '>' after ','
+##############################################
+dir1:
+	$SPACE > dir1; ',' > dir2; '>' > pop2; ')' > ext_end;
+	'#' > dir1cmt;
+dir2:
+	$SPACE > dir2; '>' > push1;
+	'#' > dir2cmt;
+
+dir1cmt:
+	$ELSECOMMENT > dir1cmt_L; '*' > dir1cmt_ML1; $NL > dir1;
+dir1cmt_L:
+	$COMMENT > dir1cmt_L; $NL > dir1;
+dir1cmt_ML1:
+	$MLCOMMENT > dir1cmt_ML1; '*' > dir1cmt_ML2;
+dir1cmt_ML2:
+	'#' > dir1; $MLRETRY > dir1cmt_ML1;
+
+dir2cmt:
+	$ELSECOMMENT > dir2cmt_L; '*' > dir2cmt_ML1; $NL > dir2;
+dir2cmt_L:
+	$COMMENT > dir2cmt_L; $NL > dir2;
+dir2cmt_ML1:
+	$MLCOMMENT > dir2cmt_ML1; '*' > dir2cmt_ML2;
+dir2cmt_ML2:
+	'#' > dir2; $MLRETRY > dir2cmt_ML1;
+
+# handle quoted push/pop chars
+# dir need not/must not be quoted
+#################################
+pushquote1:
+	$ANY > pushquote2;
+pushquote2:
+	''' > push2;
+popquote1:
+	$ANY > popquote2;
+popquote2:
+	''' > pop1;
+poppushq1:
+	$ANY > poppushq2;
+poppushq2:
+	''' > pop3;
+
+*#
+
+# Variable definitions: 
+########################
+# May exist anywhere in the file:
+# > above/below any state definitions
+# > between state transitions
+#
+# NOT to be confused with variable
+# 'references', which exist within
+# variable definitions or transition
+# statements (ie. $MYALPHA).
+# 
+# Examples of variable definitions:
+#     VAR = a,b,c
+#     VAR = $VAR,d,e,f;
+#     VAR = $VAR \ d,e,f;
+#     VAR = $VAR,x,y,z \ a,b;
+#     VAR = $VAR \ $OTHERVAR
+#     VAR = $VAR \ $OTHERVAR,a,b
+#     VAR = $VAR \ u,v,$OTHERVAR
+#     VAR = $OTHERVAR;
+#
+# Note: tmfuck will warn the user
+# when undeclared variables references
+# are used. This file is more about 
+# validating syntax and is not quite so
+# ambitious. :P
+#
+# The 'set difference' operator '\' may
+# only be used once per definition. Think of it 
+# as a minus (-) sign. It's good to think of 
+# these variables as sets containing portions of
+# an alphabet.
+# > The '\' operator may NOT be used in transition
+#   statements to modify variables
+#
+# Header variables declared before any state name
+# definitions are handled in the vardef_alt* states
+#####################################################
+vardef1:
+#	$SPACE > vardef1; $CHAR > vardef2; ''' > vardefquote1;
+	$SPACE > vardef1; $ELSEDIGIT > vardef2; $DIGIT,'-' > vardef1_dig; ''' > vardefquote1;
+	'$' > vardefref1; '#' > vardef1cmt;
+vardef2:
+	$SPACE > vardef2; ',' > vardef1; ';' > sym1; '\' > subtra1;
+	'#' > vardef2cmt;
+
+vardef1_dig:
+	$SPACE > vardef2; $DIGIT > vardef1_dig; ',' > vardef1; ';' > sym1; '\' > subtra1;
+	'#' > vardef1_dig_cmt;
+
+vardef1_dig_cmt:
+	$ELSECOMMENT > vardef1_dig_cmt_L; '*' > vardef1_dig_cmt_ML1; $NL > vardef2;
+vardef1_dig_cmt_L:
+	$COMMENT > vardef1_dig_cmt_L; $NL > vardef2;
+vardef1_dig_cmt_ML1:
+	$MLCOMMENT > vardef1_dig_cmt_ML1; '*' > vardef1_dig_cmt_ML2;
+vardef1_dig_cmt_ML2:
+	'#' > vardef2; $MLRETRY > vardef1_dig_cmt_ML1; '*' > vardef1_dig_cmt_ML2;
+
+vardef1cmt:
+	$ELSECOMMENT > vardef1cmt_L; '*' > vardef1cmt_ML1; $NL > vardef1;
+vardef1cmt_L:
+	$COMMENT > vardef1cmt_L; $NL > vardef1;
+vardef1cmt_ML1:
+	$MLCOMMENT > vardef1cmt_ML1; '*' > vardef1cmt_ML2;
+vardef1cmt_ML2:
+	'#' > vardef1; $MLRETRY > vardef1cmt_ML1; '*' > vardef1cmt_ML2;
+
+vardef2cmt:
+	$ELSECOMMENT > vardef2cmt_L; '*' > vardef2cmt_ML1; $NL > vardef2;
+vardef2cmt_L:
+	$COMMENT > vardef2cmt_L; $NL > vardef2;
+vardef2cmt_ML1:
+	$MLCOMMENT > vardef2cmt_ML1; '*' > vardef2cmt_ML2;
+vardef2cmt_ML2:
+	'#' > vardef2; $MLRETRY > vardef2cmt_ML1; '*' > vardef2cmt_ML2;
+
+vardefquote1:
+	$ANY > vardefquote2;
+vardefquote2:
+	''' > vardef2;
+
+vardefref1:
+	$CHAR > vardefref2;
+vardefref2:
+	$CHAR > vardefref2; $SPACE > vardef2; ',' > vardef1; ';' > sym1;
+	'#' > vardefref2cmt; '\' > subtra1;
+
+vardefref2cmt:
+	$ELSECOMMENT > vardefref2cmt_L; '*' > vardefref2cmt_ML1; $NL > vardef2;
+vardefref2cmt_L:
+	$COMMENT > vardefref2cmt_L; $NL > vardef2;
+vardefref2cmt_ML1:
+	$MLCOMMENT > vardefref2cmt_ML1; '*' > vardefref2cmt_ML2;
+vardefref2cmt_ML2:
+	'#' > vardef2; $MLRETRY > vardefref2cmt_ML1; '*' > vardefref2cmt_ML2;
+
+subtra1:
+#	$SPACE > subtra1; $CHAR > subtra2; ''' > subtraquote1;
+	$SPACE > subtra1; $ELSEDIGIT > subtra2; $DIGIT,'-' > subtra1_dig; ''' > subtraquote1;
+	'$' > subtraref1; '#' > subtra1cmt;
+subtra2:
+	$SPACE > subtra2; ',' > subtra1; ';' > sym1;
+	'#' > subtra2cmt;
+
+subtra1_dig:
+	$SPACE > subtra2; $DIGIT > subtra1_dig; ',' > subtra1; ';' > sym1;
+	'#' > subtra1_dig_cmt;
+
+subtra1_dig_cmt:
+	$ELSECOMMENT > subtra1_dig_cmt_L; '*' > subtra1_dig_cmt_ML1; $NL > subtra2;
+subtra1_dig_cmt_L:
+	$COMMENT > subtra1_dig_cmt_L; $NL > subtra2;
+subtra1_dig_cmt_ML1:
+	$MLCOMMENT > subtra1_dig_cmt_ML1; '*' > subtra1_dig_cmt_ML2;
+subtra1_dig_cmt_ML2:
+	'#' > subtra2; $MLRETRY > subtra1_dig_cmt_ML1; '*' > subtra1_dig_cmt_ML2;
+
+subtra1cmt:
+	$ELSECOMMENT > subtra1cmt_L; '*' > subtra1cmt_ML1; $NL > subtra1;
+subtra1cmt_L:
+	$COMMENT > subtra1cmt_L; $NL > subtra1;
+subtra1cmt_ML1:
+	$MLCOMMENT > subtra1cmt_ML1; '*' > subtra1cmt_ML2;
+subtra1cmt_ML2:
+	'#' > subtra1; $MLRETRY > subtra1cmt_ML1; '*' > subtra1cmt_ML2;
+
+subtra2cmt:
+	$ELSECOMMENT > subtra2cmt_L; '*' > subtra2cmt_ML1; $NL > subtra2;
+subtra2cmt_L:
+	$COMMENT > subtra2cmt_L; $NL > subtra2;
+subtra2cmt_ML1:
+	$MLCOMMENT > subtra2cmt_ML1; '*' > subtra2cmt_ML2;
+subtra2cmt_ML2:
+	'#' > subtra2; $MLRETRY > subtra2cmt_ML1; '*' > subtra2cmt_ML2;
+
+subtraquote1:
+	$ANY > subtraquote2;
+subtraquote2:
+	''' > subtra2;
+
+subtraref1:
+	$CHAR > subtraref2;
+subtraref2:
+	$CHAR > subtraref2; $SPACE > subtra2; ',' > subtra1; ';' > sym1;
+	'#' > subtraref2cmt;
+
+subtraref2cmt:
+	$ELSECOMMENT > subtraref2cmt_L; '*' > subtraref2cmt_ML1; $NL > subtra2;
+subtraref2cmt_L:
+	$COMMENT > subtraref2cmt_L; $NL > subtra2;
+subtraref2cmt_ML1:
+	$MLCOMMENT > subtraref2cmt_ML1; '*' > subtraref2cmt_ML2;
+subtraref2cmt_ML2:
+	'#' > subtra2; $MLRETRY > subtraref2cmt_ML1; '*' > subtraref2cmt_ML2;
+
+# Variable definitions alternate
+# > For 'header' variables declared before
+#   any state definitions
+# > Nearly the same as vardef* sequence, but:
+#   ';' returns to state1 instead of sym
+#   '>' is not allowed
+#   ',' potential transition sym lists are
+#       not allowed
+#############################################
+vardef_alt1:
+#	$SPACE > vardef_alt1; $CHAR > vardef_alt2; ''' > vardefq_alt1;
+	$SPACE > vardef_alt1; $ELSEDIGIT > vardef_alt2; $DIGIT,'-' > vardef_dig_alt1; ''' > vardefq_alt1;
+	'$' > vardefref_alt1; '#' > vardefcmt_alt1;
+vardef_alt2:
+	$SPACE > vardef_alt2; ',' > vardef_alt1; ';' > state1; '\' > subtra_alt1;
+	'#' > vardefcmt_alt2;
+
+vardef_dig_alt1:
+	$SPACE > vardef_alt2; $DIGIT > vardef_dig_alt1; 
+	',' > vardef_alt1; ';' > state1; '\' > subtra_alt1;
+	'#' > vardef_dig_cmt_alt1;
+
+vardef_dig_cmt_alt1:
+	$ELSECOMMENT > vardef_dig_cmt_alt1_L; '*' > vardef_dig_cmt_alt1_ML1; $NL > vardef_alt2;
+vardef_dig_cmt_alt1_L:
+	$COMMENT > vardef_dig_cmt_alt1_L; $NL > vardef_alt2;
+vardef_dig_cmt_alt1_ML1:
+	$MLCOMMENT > vardef_dig_cmt_alt1_ML1; '*' > vardef_dig_cmt_alt1_ML2;
+vardef_dig_cmt_alt1_ML2:
+	'#' > vardef_alt2; $MLRETRY > vardef_dig_cmt_alt1_ML1; '*' > vardef_dig_cmt_alt1_ML2;
+
+vardefcmt_alt1:
+	$ELSECOMMENT > vardefcmt_alt1_L; '*' > vardefcmt_alt1_ML1; $NL > vardef_alt1;
+vardefcmt_alt1_L:
+	$COMMENT > vardefcmt_alt1_L; $NL > vardef_alt1;
+vardefcmt_alt1_ML1:
+	$MLCOMMENT > vardefcmt_alt1_ML1; '*' > vardefcmt_alt1_ML2;
+vardefcmt_alt1_ML2:
+	'#' > vardef_alt1; $MLRETRY > vardefcmt_alt1_ML1; '*' > vardefcmt_alt1_ML2;
+
+vardefcmt_alt2:
+	$ELSECOMMENT > vardefcmt_alt2_L; '*' > vardefcmt_alt2_ML1; $NL > vardef_alt2;
+vardefcmt_alt2_L:
+	$COMMENT > vardefcmt_alt2_L; $NL > vardef_alt2;
+vardefcmt_alt2_ML1:
+	$MLCOMMENT > vardefcmt_alt2_ML1; '*' > vardefcmt_alt2_ML2;
+vardefcmt_alt2_ML2:
+	'#' > vardef_alt2; $MLRETRY > vardefcmt_alt2_ML1; '*' > vardefcmt_alt2_ML2;
+
+vardefq_alt1:
+	$ANY > vardefq_alt2;
+vardefq_alt2:
+	''' > vardef_alt2;
+
+vardefref_alt1:
+	$CHAR > vardefref_alt2;
+vardefref_alt2:
+	$CHAR > vardefref_alt2; $SPACE > vardef_alt2; ',' > vardef_alt1; ';' > state1;
+	'#' > vardefrefcmt_alt2; '\' > subtra_alt1;
+
+vardefrefcmt_alt2:
+	$ELSECOMMENT > vardefrefcmt_alt2_L; '*' > vardefrefcmt_alt2_ML1; $NL > vardef_alt2;
+vardefrefcmt_alt2_L:
+	$COMMENT > vardefrefcmt_alt2_L; $NL > vardef_alt2;
+vardefrefcmt_alt2_ML1:
+	$MLCOMMENT > vardefrefcmt_alt2_ML1; '*' > vardefrefcmt_alt2_ML2;
+vardefrefcmt_alt2_ML2:
+	'#' > vardef_alt2; $MLRETRY > vardefrefcmt_alt2_ML1; '*' > vardefrefcmt_alt2_ML2;
+
+subtra_alt1:
+#	$SPACE > subtra_alt1; $CHAR > subtra_alt2; ''' > subtraquote_alt1;
+	$SPACE > subtra_alt1; $ELSEDIGIT > subtra_alt2; $DIGIT,'-' > subtra_dig_alt1; ''' > subtraquote_alt1;
+	'$' > subtraref_alt1; '#' > subtracmt_alt1;
+subtra_alt2:
+	$SPACE > subtra_alt2; ',' > subtra_alt1; ';' > state1;
+	'#' > subtracmt_alt2;
+
+subtra_dig_alt1:
+	$SPACE > subtra_alt2; $DIGIT > subtra_dig_alt1;
+	',' > subtra_alt1; ';' > state1;
+	'#' > subtra_dig_cmt_alt1;
+
+subtra_dig_cmt_alt1:
+	$ELSECOMMENT > subtra_dig_cmt_alt1_L; '*' > subtra_dig_cmt_alt1_ML1; $NL > subtra_alt2;
+subtra_dig_cmt_alt1_L:
+	$COMMENT > subtra_dig_cmt_alt1_L; $NL > subtra_alt2;
+subtra_dig_cmt_alt1_ML1:
+	$MLCOMMENT > subtra_dig_cmt_alt1_ML1; '*' > subtra_dig_cmt_alt1_ML2;
+subtra_dig_cmt_alt1_ML2:
+	'#' > subtra_alt2; $MLRETRY > subtra_dig_cmt_alt1_ML1; '*' > subtra_dig_cmt_alt1_ML2;
+
+subtracmt_alt1:
+	$ELSECOMMENT > subtracmt_alt1_L; '*' > subtracmt_alt1_ML1; $NL > subtra_alt1;
+subtracmt_alt1_L:
+	$COMMENT > subtracmt_alt1_L; $NL > subtra_alt1;
+subtracmt_alt1_ML1:
+	$MLCOMMENT > subtracmt_alt1_ML1; '*' > subtracmt_alt1_ML2;
+subtracmt_alt1_ML2:
+	'#' > subtra_alt1; $MLRETRY > subtracmt_alt1_ML1; '*' > subtracmt_alt1_ML2;
+
+subtracmt_alt2:
+	$ELSECOMMENT > subtracmt_alt2_L; '*' > subtracmt_alt2_ML1; $NL > subtra_alt2;
+subtracmt_alt2_L:
+	$COMMENT > subtracmt_alt2_L; $NL > subtra_alt2;
+subtracmt_alt2_ML1:
+	$MLCOMMENT > subtracmt_alt2_ML1; '*' > subtracmt_alt2_ML2;
+subtracmt_alt2_ML2:
+	'#' > subtra_alt2; $MLRETRY > subtracmt_alt2_ML1; '*' > subtracmt_alt2_ML2;
+
+subtraquote_alt1:
+	$ANY > subtraquote_alt2;
+subtraquote_alt2:
+	''' > subtra_alt2;
+
+subtraref_alt1:
+	$CHAR > subtraref_alt2;
+subtraref_alt2:
+	$CHAR > subtraref_alt2; $SPACE > subtra_alt2; ',' > subtra_alt1; ';' > state1;
+	'#' > subtrarefcmt_alt2;
+
+subtrarefcmt_alt2:
+	$ELSECOMMENT > subtrarefcmt_alt2_L; '*' > subtrarefcmt_alt2_ML1; $NL > subtra_alt2;
+subtrarefcmt_alt2_L:
+	$COMMENT > subtrarefcmt_alt2_L; $NL > subtra_alt2;
+subtrarefcmt_alt2_ML1:
+	$MLCOMMENT > subtrarefcmt_alt2_ML1; '*' > subtrarefcmt_alt2_ML2;
+subtrarefcmt_alt2_ML2:
+	'#' > subtra_alt2; $MLRETRY > subtrarefcmt_alt2_ML1; '*' > subtrarefcmt_alt2_ML2;
+
+
+# directives: determine if state name is special
+# > may appear on any line
+# > may NOT appear between transition statements
+# -----------------------------------------------
+# start: q0,q1,...; (only last state listed)
+# final: q2,q3,q4,...;
+# reject: q6,q7,...;
+# blank: x, 'y',...; (only last char listed)
+# bound: L,R,H,...; (last L or R used)
+#################################################
+#
+# Generic comment 'eaters' for directive match
+# branches that fail to fully match their
+# directive names.
+# > One char may be one of several things...
+# > Two chars may only be a state name or a
+#   variable definition name
+#################################################
+dirtrycmt1:
+	$ELSECOMMENT > dirtrycmt1_L; '*' > dirtrycmt1_ML1; $NL > sym2;
+dirtrycmt1_L:
+	$COMMENT > dirtrycmt1_L; $NL > sym2;
+dirtrycmt1_ML1:
+	$MLCOMMENT > dirtrycmt1_ML1; '*' > dirtrycmt1_ML2;
+dirtrycmt1_ML2:
+	'#' > sym2; $MLRETRY > dirtrycmt1_ML1; '*' > dirtrycmt1_ML2;
+
+dirtrycmt2:
+	$ELSECOMMENT > dirtrycmt2_L; '*' > dirtrycmt2_ML1; $NL > sym5;
+dirtrycmt2_L:
+	$COMMENT > dirtrycmt2_L; $NL > sym5;
+dirtrycmt2_ML1:
+	$MLCOMMENT > dirtrycmt2_ML1; '*' > dirtrycmt2_ML2;
+dirtrycmt2_ML2:
+	'#' > sym5; $MLRETRY > dirtrycmt2_ML1; '*' > dirtrycmt2_ML2;
+
+dirtrycmt_alt1:
+	$ELSECOMMENT > dirtrycmt_alt1_L; '*' > dirtrycmt_alt1_ML1; $NL > state3;
+dirtrycmt_alt1_L:
+	$COMMENT > dirtrycmt_alt1_L; $NL > state3;
+dirtrycmt_alt1_ML1:
+	$MLCOMMENT > dirtrycmt_alt1_ML1; '*' > dirtrycmt_alt1_ML2;
+dirtrycmt_alt1_ML2:
+	'#' > state3; $MLRETRY > dirtrycmt_alt1_ML1; '*' > dirtrycmt_alt1_ML2;
+
+# confirm start directive name
+# > if 2nd char is not 't', it is part of a 
+#   state name
+# > if 2nd char is space, it is state name
+#   of length 1 or an unquoted char as
+#   part of a transition statement
+##############################################
+start1:
+	ELSECHAR = $CHAR \ t;
+	t > start2; $SPACE > sym2; $ELSECHAR > sym4; ',' > symlist1; ':' > sym1; '>' > dest1;
+	'#' > dirtrycmt1; '=' > vardef1;
+start2:
+	ELSECHAR = $CHAR \ a;
+	a > start3; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+start3:
+	ELSECHAR = $CHAR \ r;
+	r > start4; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+start4:
+	ELSECHAR = $CHAR \ t;
+	t > start5; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+start5:
+	$SPACE > start6; ':' > starts1; $CHAR > sym4;
+	'#' > startcmt; '=' > vardef1;
+start6:
+	$SPACE > start6; ':' > starts1;
+	'#' > startcmt; '=' > vardef1;
+
+startcmt:
+	$ELSECOMMENT > startcmt_L; '*' > startcmt_ML1; $NL > start6;
+startcmt_L:
+	$COMMENT > startcmt_L; $NL > start6;
+startcmt_ML1:
+	$MLCOMMENT > startcmt_ML1; '*' > startcmt_ML2;
+startcmt_ML2:
+	'#' > start6; $MLRETRY > startcmt_ML1; '*' > startcmt_ML2;
+
+# Alternate directive checks
+#################################################
+# Besides whitespace and comments, the file may 
+# not begin with a transition-- only a state name, 
+# variable name, or directive 
+# > ie. (q0: ...; |OR| start: ... |OR| VAR= ...)
+# -----------------------------------------------
+# Alternate sets of states exist for directive
+# name matches occurring before any state 
+# definitions have occurred
+# 
+# The main and 'alt' sets do however share the
+# same set of states which process the actual
+# directive parameters, because once a directive
+# name has been confirmed past the ':', then
+# they will always return to 'state1', where
+# transition definitions cannot be processed
+#################################################
+start_alt1:
+	ELSECHAR = $CHAR \ t;
+	t > start_alt2; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+start_alt2:
+	ELSECHAR = $CHAR \ a;
+	a > start_alt3; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+start_alt3:
+	ELSECHAR = $CHAR \ r;
+	r > start_alt4; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+start_alt4:
+	ELSECHAR = $CHAR \ t;
+	t > start_alt5; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+start_alt5:
+	$SPACE > start_alt6; ':' > starts1; $CHAR > state2;
+	'#' > startcmt_alt; '=' > vardef_alt1;
+start_alt6:
+	$SPACE > start_alt6; ':' > starts1;
+	'#' > startcmt_alt; '=' > vardef_alt1;
+
+startcmt_alt:
+	$ELSECOMMENT > startcmt_alt_L; '*' > startcmt_alt_ML1; $NL > start_alt6;
+startcmt_alt_L:
+	$COMMENT > startcmt_alt_L; $NL > start_alt6;
+startcmt_alt_ML1:
+	$MLCOMMENT > startcmt_alt_ML1; '*' > startcmt_alt_ML2;
+startcmt_alt_ML2:
+	'#' > start_alt6; $MLRETRY > startcmt_alt_ML1; '*' > startcmt_alt_ML2;
+
+# Process start state
+# > list allowed, but only last state
+#   listed is set as start state in tmf
+########################################
+starts1:
+	$SPACE > starts1; $CHAR > starts2;
+	'#' > starts1cmt;
+starts2:
+	$CHAR > starts2; ',' > starts1; $SPACE > starts3; ';' > state1;
+	'#' > starts2cmt;
+starts3:
+	$SPACE > starts3; ',' > starts1; ';' > state1;
+	'#' > starts3cmt;
+
+starts1cmt:
+	$ELSECOMMENT > starts1cmt_L; '*' > starts1cmt_ML1; $NL > starts1;
+starts1cmt_L:
+	$COMMENT > starts1cmt_L; $NL > starts1;
+starts1cmt_ML1:
+	$MLCOMMENT > starts1cmt_ML1; '*' > starts1cmt_ML2;
+starts1cmt_ML2:
+	'#' > starts1; $MLRETRY > starts1cmt_ML1; '*' > starts1cmt_ML2;
+
+starts2cmt:
+	$ELSECOMMENT > starts2cmt_L; '*' > starts2cmt_ML1; $NL > starts2;
+starts2cmt_L:
+	$COMMENT > starts2cmt_L; $NL > starts2;
+starts2cmt_ML1:
+	$MLCOMMENT > starts2cmt_ML1; '*' > starts2cmt_ML2;
+starts2cmt_ML2:
+	'#' > starts2; $MLRETRY > starts2cmt_ML1; '*' > starts2cmt_ML2;
+
+starts3cmt:
+	$ELSECOMMENT > starts3cmt_L; '*' > starts3cmt_ML1; $NL > starts3;
+starts3cmt_L:
+	$COMMENT > starts3cmt_L; $NL > starts3;
+starts3cmt_ML1:
+	$MLCOMMENT > starts3cmt_ML1; '*' > starts3cmt_ML2;
+starts3cmt_ML2:
+	'#' > starts3; $MLRETRY > starts3cmt_ML1; '*' > starts3cmt_ML2;
+
+# Confirm final directive name
+##############################
+final1:
+	ELSECHAR = $CHAR \ i;
+	i > final2; $SPACE > sym2; $ELSECHAR > sym4; ',' > symlist1; ':' > sym1; '>' > dest1;
+	'#' > dirtrycmt1; '=' > vardef1;
+final2:
+	ELSECHAR = $CHAR \ n;
+	n > final3; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+final3:
+	ELSECHAR = $CHAR \ a;
+	a > final4; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+final4:
+	ELSECHAR = $CHAR \ l;
+	l > final5; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+final5:
+	$SPACE > final6; ':' > finals1; $CHAR > sym4;
+	'#' > finalcmt; '=' > vardef1;
+final6:
+	$SPACE > final6; ':' > finals1;
+	'#' > finalcmt; '=' > vardef1;
+
+finalcmt:
+	$ELSECOMMENT > finalcmt_L; '*' > finalcmt_ML1; $NL > final6;
+finalcmt_L:
+	$COMMENT > finalcmt_L; $NL > final6;
+finalcmt_ML1:
+	$MLCOMMENT > finalcmt_ML1; '*' > finalcmt_ML2;
+finalcmt_ML2:
+	'#' > final6; $MLRETRY > finalcmt_ML1; '*' > finalcmt_ML2;
+
+# Alternate: confirm final directive name
+#########################################
+final_alt1:
+	ELSECHAR = $CHAR \ i;
+	i > final_alt2; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+final_alt2:
+	ELSECHAR = $CHAR \ n;
+	n > final_alt3; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+final_alt3:
+	ELSECHAR = $CHAR \ a;
+	a > final_alt4; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+final_alt4:
+	ELSECHAR = $CHAR \ l;
+	l > final_alt5; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+final_alt5:
+	$SPACE > final_alt6; ':' > finals1; $CHAR > state2;
+	'#' > finalcmt_alt; '=' > vardef_alt1;
+final_alt6:
+	$SPACE > final_alt6; ':' > finals1;
+	'#' > finalcmt_alt; '=' > vardef_alt1;
+
+finalcmt_alt:
+	$ELSECOMMENT > finalcmt_alt_L; '*' > finalcmt_alt_ML1; $NL > final_alt6;
+finalcmt_alt_L:
+	$COMMENT > finalcmt_alt_L; $NL > final_alt6;
+finalcmt_alt_ML1:
+	$MLCOMMENT > finalcmt_alt_ML1; '*' > finalcmt_alt_ML2;
+finalcmt_alt_ML2:
+	'#' > final_alt6; $MLRETRY > finalcmt_alt_ML1; '*' > finalcmt_alt_ML2;
+
+# Process final states
+######################
+finals1:
+	$SPACE > finals1; $CHAR > finals2;
+	'#' > finals1cmt;
+finals2:
+	$CHAR > finals2; ',' > finals1; $SPACE > finals3; ';' > state1;
+	'#' > finals3cmt;
+finals3:
+	$SPACE > finals3; ',' > finals1; ';' > state1;
+	'#' > finals3cmt;
+
+finals1cmt:
+	$ELSECOMMENT > finals1cmt_L; '*' > finals1cmt_ML1; $NL > finals1;
+finals1cmt_L:
+	$COMMENT > finals1cmt_L; $NL > finals1;
+finals1cmt_ML1:
+	$MLCOMMENT > finals1cmt_ML1; '*' > finals1cmt_ML2;
+finals1cmt_ML2:
+	'#' > finals1; $MLRETRY > finals1cmt_ML1; '*' > finals1cmt_ML2;
+
+finals2cmt:
+	$ELSECOMMENT > finals2cmt_L; '*' > finals2cmt_ML1; $NL > finals2;
+finals2cmt_L:
+	$COMMENT > finals2cmt_L; $NL > finals2;
+finals2cmt_ML1:
+	$MLCOMMENT > finals2cmt_ML1; '*' > finals2cmt_ML2;
+finals2cmt_ML2:
+	'#' > finals2; $MLRETRY > finals2cmt_ML1; '*' > finals2cmt_ML2;
+
+finals3cmt:
+	$ELSECOMMENT > finals3cmt_L; '*' > finals3cmt_ML1; $NL > finals3;
+finals3cmt_L:
+	$COMMENT > finals3cmt_L; $NL > finals3;
+finals3cmt_ML1:
+	$MLCOMMENT > finals3cmt_ML1; '*' > finals3cmt_ML2;
+finals3cmt_ML2:
+	'#' > finals3; $MLRETRY > finals3cmt_ML1; '*' > finals3cmt_ML2;
+
+# Confirm reject directive name
+###############################
+reject1:
+	ELSECHAR = $CHAR \ e;
+	e > reject2; $SPACE > sym2; $ELSECHAR > sym4; ',' > symlist1; ':' > sym1; '>' > dest1;
+	'#' > dirtrycmt1; '=' > vardef1;
+reject2:
+	ELSECHAR = $CHAR \ j;
+	j > reject3; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > ditfailcmt2; '=' > vardef1;
+reject3:
+	ELSECHAR = $CHAR \ e;
+	e > reject4; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+reject4:
+	ELSECHAR = $CHAR \ c;
+	c > reject5; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+reject5:
+	ELSECHAR = $CHAR \ t;
+	t > reject6; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+reject6:
+	$SPACE > reject7; ':' > rejects1; $CHAR > sym4;
+	'#' > rejectcmt; '=' > vardef1;
+reject7:
+	$SPACE > reject7; ':' > rejects1;
+	'#' > rejectcmt; '=' > vardef1;
+
+rejectcmt:
+	$ELSECOMMENT > rejectcmt_L; '*' > rejectcmt_ML1; $NL > reject7;
+rejectcmt_L:
+	$COMMENT > rejectcmt_L; $NL > reject7;
+rejectcmt_ML1:
+	$MLCOMMENT > rejectcmt_ML1; '*' > rejectcmt_ML2;
+rejectcmt_ML2:
+	'#' > reject7; $MLRETRY > rejectcmt_ML1; '*' > rejectcmt_ML2;
+
+# Alternate: confirm reject directive name
+##########################################
+reject_alt1:
+	ELSECHAR = $CHAR \ e;
+	e > reject_alt2; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt1; '=' > vardef_alt1;
+reject_alt2:
+	ELSECHAR = $CHAR \ j;
+	j > reject_alt3; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > ditfailcmt1; '=' > vardef_alt1;
+reject_alt3:
+	ELSECHAR = $CHAR \ e;
+	e > reject_alt4; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt1; '=' > vardef_alt1;
+reject_alt4:
+	ELSECHAR = $CHAR \ c;
+	c > reject_alt5; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt1; '=' > vardef_alt1;
+reject_alt5:
+	ELSECHAR = $CHAR \ t;
+	t > reject_alt6; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt1; '=' > vardef_alt1;
+reject_alt6:
+	$SPACE > reject_alt7; ':' > rejects1; $CHAR > state2;
+	'#' > rejectcmt_alt; '=' > vardef_alt1;
+reject_alt7:
+	$SPACE > reject_alt7; ':' > rejects1;
+	'#' > rejectcmt_alt; '=' > vardef_alt1;
+
+rejectcmt_alt:
+	$ELSECOMMENT > rejectcmt_alt_L; '*' > rejectcmt_alt_ML1; $NL > reject_alt7;
+rejectcmt_alt_L:
+	$COMMENT > rejectcmt_alt_L; $NL > reject_alt7;
+rejectcmt_alt_ML1:
+	$MLCOMMENT > rejectcmt_alt_ML1; '*' > rejectcmt_alt_ML2;
+rejectcmt_alt_ML2:
+	'#' > reject_alt7; $MLRETRY > rejectcmt_alt_ML1; '*' > rejectcmt_alt_ML2;
+
+# Process reject states
+#######################
+rejects1:
+	$SPACE > rejects1; $CHAR > rejects2;
+	'#' > rejects1cmt;
+rejects2:
+	$CHAR > rejects2; ',' > rejects1; $SPACE > rejects3; ';' > state1;
+	'#' > rejects2cmt;
+rejects3:
+	$SPACE > rejects3; ',' > rejects1; ';' > state1;
+	'#' > rejects3cmt;
+
+rejects1cmt:
+	$ELSECOMMENT > rejects1cmt_L; '*' > rejects1cmt_ML1; $NL > rejects1;
+rejects1cmt_L:
+	$COMMENT > rejects1cmt_L; $NL > rejects1;
+rejects1cmt_ML1:
+	$MLCOMMENT > rejects1cmt_ML1; '*' > rejects1cmt_ML2;
+rejects1cmt_ML2:
+	'#' > rejects1; $MLRETRY > rejects1cmt_ML1; '*' > rejects1cmt_ML2;
+
+rejects2cmt:
+	$ELSECOMMENT > rejects2cmt_L; '*' > rejects2cmt_ML1; $NL > rejects2;
+rejects2cmt_L:
+	$COMMENT > rejects2cmt_L; $NL > rejects2;
+rejects2cmt_ML1:
+	$MLCOMMENT > rejects2cmt_ML1; '*' > rejects2cmt_ML2;
+rejects2cmt_ML2:
+	'#' > rejects2; $MLRETRY > rejects2cmt_ML1; '*' > rejects2cmt_ML2;
+
+rejects3cmt:
+	$ELSECOMMENT > rejects3cmt_L; '*' > rejects3cmt_ML1; $NL > rejects3;
+rejects3cmt_L:
+	$COMMENT > rejects3cmt_L; $NL > rejects3;
+rejects3cmt_ML1:
+	$MLCOMMENT > rejects3cmt_ML1; '*' > rejects3cmt_ML2;
+rejects3cmt_ML2:
+	'#' > rejects3; $MLRETRY > rejects3cmt_ML1; '*' > rejects3cmt_ML2;
+
+# Determine if blank or bound directive name
+# > they share a 'b' :)
+############################################
+blkbnd1:
+	ELSECHAR = $CHAR \ l,o;
+	l > blank1; o > bound1; $SPACE > sym2; $ELSECHAR > sym4; 
+	',' > symlist1; ':' > sym1; '>' > dest1;
+	'#' > dirtrycmt1; '=' > vardef1;
+
+# Alternate: confirm blank or bound directive name
+##################################################
+blkbnd_alt1:
+	l > blank_alt1; o > bound_alt1; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+
+# Confirm blank directive name
+##############################
+blank1:
+	ELSECHAR = $CHAR \ a;
+	a > blank2; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+blank2:
+	ELSECHAR = $CHAR \ n;
+	n > blank3; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+blank3:
+	ELSECHAR = $CHAR \ k;
+	k > blank4; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+blank4:
+	$SPACE > blank5; ':' > blanks1; $CHAR > sym4;
+	'#' > blankcmt; '=' > vardef1;
+blank5:
+	$SPACE > blank5; ':' > blanks1; ';' > state1;
+	'#' > blankcmt; '=' > vardef1;
+
+blankcmt:
+	$ELSECOMMENT > blankcmt_L; '*' > blankcmt_ML1; $NL > blank5;
+blankcmt_L:
+	$COMMENT > blankcmt_L; $NL > blank5;
+blankcmt_ML1:
+	$MLCOMMENT > blankcmt_ML1; '*' > blankcmt_ML2;
+blankcmt_ML2:
+	'#' > blank5; $MLRETRY > blankcmt_ML1; '*' > blankcmt_ML2;
+
+# Alternate: confirm blank directive name
+#########################################
+blank_alt1:
+	ELSECHAR = $CHAR \ a;
+	a > blank_alt2; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+blank_alt2:
+	ELSECHAR = $CHAR \ n;
+	n > blank_alt3; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+blank_alt3:
+	ELSECHAR = $CHAR \ k;
+	k > blank_alt4; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+blank_alt4:
+	$SPACE > blank_alt5; ':' > blanks1; $CHAR > state2;
+	'#' > blankcmt_alt; '=' > vardef_alt1;
+blank_alt5:
+	$SPACE > blank_alt5; ':' > blanks1; ';' > state1;
+	'#' > blankcmt_alt; '=' > vardef_alt1;
+
+blankcmt_alt:
+	$ELSECOMMENT > blankcmt_alt_L; '*' > blankcmt_alt_ML1; $NL > blank_alt5;
+blankcmt_alt_L:
+	$COMMENT > blankcmt_alt_L; $NL > blank_alt5;
+blankcmt_alt_ML1:
+	$MLCOMMENT > blankcmt_alt_ML1; '*' > blankcmt_alt_ML2;
+blankcmt_alt_ML2:
+	'#' > blank_alt5; $MLRETRY > blankcmt_alt_ML1; '*' > blankcmt_alt_ML2;
+
+# Process blank symbol
+# > may be quoted
+# > may list several, but only last one used
+# > may be empty, then tmf uses default '_'
+#############################################
+blanks1:
+	$SPACE > blanks1; $CHAR > blanks2; ''' > blanksq1; ';' > state1;
+	'#' > blanks1cmt;
+blanks2:
+	$SPACE > blanks2; ',' > blanks1; ';' > state1;
+	'#' > blanks2cmt;
+
+blanks1cmt:
+	$ELSECOMMENT > blanks1cmt_L; '*' > blanks1cmt_ML1; $NL > blanks1;
+blanks1cmt_L:
+	$COMMENT > blanks1cmt_L; $NL > blanks1;
+blanks1cmt_ML1:
+	$MLCOMMENT > blanks1cmt_ML1; '*' > blanks1cmt_ML2;
+blanks1cmt_ML2:
+	'#' > blanks1; $MLRETRY > blanks1cmt_ML1; '*' > blanks1cmt_ML2;
+
+blanks2cmt:
+	$ELSECOMMENT > blanks2cmt_L; '*' > blanks2cmt_ML1; $NL > blanks2;
+blanks2cmt_L:
+	$COMMENT > blanks2cmt_L; $NL > blanks2;
+blanks2cmt_ML1:
+	$MLCOMMENT > blanks2cmt_ML1; '*' > blanks2cmt_ML2;
+blanks2cmt_ML2:
+	'#' > blanks2; $MLRETRY > blanks2cmt_ML1; '*' > blanks2cmt_ML2;
+
+blanksq1:
+	$ANY > blanksq2;
+blanksq2:
+	''' > blanks2;
+
+# Confirm bound directive name
+# > may be empty (bound: ;), then
+#   defaults to infinite tape in
+#   both directions
+#################################
+bound1:
+	ELSECHAR = $CHAR \ u;
+	u > bound2; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+bound2:
+	ELSECHAR = $CHAR \ n;
+	n > bound3; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+bound3:
+	ELSECHAR = $CHAR \ d;
+	d > bound4; $SPACE > sym5; $ELSECHAR > sym4; ':' > sym1;
+	'#' > dirtrycmt2; '=' > vardef1;
+bound4:
+	$SPACE > bound5; ':' > bounds1; $CHAR > sym4;
+	'#' > boundcmt; '=' > vardef1;
+bound5:
+	$SPACE > bound5; ':' > bounds1; ';' > state1;
+	'#' > boundcmt; '=' > vardef1;
+
+boundcmt:
+	$ELSECOMMENT > boundcmt_L; '*' > boundcmt_ML1; $NL > bound5;
+boundcmt_L:
+	$COMMENT > boundcmt_L; $NL > bound5;
+boundcmt_ML1:
+	$MLCOMMENT > boundcmt_ML1; '*' > boundcmt_ML2;
+boundcmt_ML2:
+	'#' > bound5; $MLRETRY > boundcmt_ML1; '*' > boundcmt_ML2;
+
+# Alternate: confirm bound directive name
+#########################################
+bound_alt1:
+	ELSECHAR = $CHAR \ u;
+	u > bound_alt2; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+bound_alt2:
+	ELSECHAR = $CHAR \ n;
+	n > bound_alt3; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+bound_alt3:
+	ELSECHAR = $CHAR \ d;
+	d > bound_alt4; $SPACE > state3; $ELSECHAR > state2; ':' > sym1;
+	'#' > dirtrycmt_alt1; '=' > vardef_alt1;
+bound_alt4:
+	$SPACE > bound_alt5; ':' > bounds1; $CHAR > state2;
+	'#' > boundcmt_alt; '=' > vardef_alt1;
+bound_alt5:
+	$SPACE > bound_alt5; ':' > bounds1; ';' > state1;
+	'#' > boundcmt_alt; '=' > vardef_alt1;
+
+boundcmt_alt:
+	$ELSECOMMENT > boundcmt_alt_L; '*' > boundcmt_alt_ML1; $NL > bound_alt5;
+boundcmt_alt_L:
+	$COMMENT > boundcmt_alt_L; $NL > bound_alt5;
+boundcmt_alt_ML1:
+	$MLCOMMENT > boundcmt_alt_ML1; '*' > boundcmt_alt_ML2;
+boundcmt_alt_ML2:
+	'#' > bound_alt5; $MLRETRY > boundcmt_alt_ML1; '*' > boundcmt_alt_ML2;
+
+# Process bound parameters
+# > determines tape boundary behavior for TMs
+# > may be listed/repeated, but tmf
+#   only uses the last listed L or R
+#   to determine tape extension behavior
+# > quoting not needed/accepted here
+# > may be empty, then tmf assumes tape
+#   extends in both directions with
+#   no halting behavior when end of 
+#   tape is reached
+#############################################
+bounds1:BOUNDCHAR = L,R,H;
+	$SPACE > bounds1; $BOUNDCHAR > bounds2; ';' > state1;
+	'#' > bounds1cmt;
+bounds2:
+	$SPACE > bounds2; ',' > bounds1; ';' > state1;
+	'#' > bounds2cmt;
+
+bounds1cmt:
+	$ELSECOMMENT > bounds1cmt_L; '*' > bounds1cmt_ML1; $NL > bounds1;
+bounds1cmt_L:
+	$COMMENT > bounds1cmt_L; $NL > bounds1;
+bounds1cmt_ML1:
+	$MLCOMMENT > bounds1cmt_ML1; '*' > bounds1cmt_ML2;
+bounds1cmt_ML2:
+	'#' > bounds1; $MLRETRY > bounds1cmt_ML1; '*' > bounds1cmt_ML2;
+
+bounds2cmt:
+	$ELSECOMMENT > bounds2cmt_L; '*' > bounds2cmt_ML1; $NL > bounds2;
+bounds2cmt_L:
+	$COMMENT > bounds2cmt_L; $NL > bounds2;
+bounds2cmt_ML1:
+	$MLCOMMENT > bounds2cmt_ML1; '*' > bounds2cmt_ML2;
+bounds2cmt_ML2:
+	'#' > bounds2; $MLRETRY > bounds2cmt_ML1; '*' > bounds2cmt_ML2;
+
+# That's all, folks! :)
+#
+# For a good time, do: 
+# ./tmf spec.tmf -f spec.tmf -v

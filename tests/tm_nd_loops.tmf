@@ -1,0 +1,48 @@
+#final: q13;
+
+q0: 0 > q1(0,R),q3(a,R);
+q1: > qz(1,R);
+qz: >qy;
+qy:>qx;
+qx:>qw;
+qw:>q2;
+q2: > q1(0,R);
+q3: > q4(b,R); #> q10(L);
+q4: #*> q4(@,R);*#>qa; >q3(a,R);
+qa: >qb; #>q10(L);#,q4;
+qb: >qc; > q3(c,R),qa(&,R);
+qc: >qd; #> q3(a,R);
+qd: >qe; > qd(@,R); >q10(L);
+qe: #*>q3;*# >#*qe(+,R) ,*# q3(d,R);
+
+q10:
+	@ > q11(!,L);
+q11:
+	@ > q12(!,L);
+q12:
+	@ > q13(!,L);
+q13:
+	@ > q14(!,L);
+
+final: q22;
+
+q14:
+	@ > q15(!,L);
+q15:
+	@ > q16(!,L);
+q16:
+	@ > q17(!,L);
+q17:
+	@ > q18(!,L);
+q18:
+	@ > q19(!,L);
+q19:             # CELL_TYPE = char for all results below:
+	@ > q20(!,L); # final: q20: ~512MB memory used
+q20:				  
+	@ > q21(!,L); # final: q21: ~1.3GB memory used
+q21:
+	@ > q22(!,L); # final: q22: ~9.6GB memory used
+q22:
+	@ > q23(!,L); # final: q23: process killed on 16GB RAM machine :/
+
+

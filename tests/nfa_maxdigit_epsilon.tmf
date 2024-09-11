@@ -1,0 +1,23 @@
+# Figure 1.36 (pg 53) in Sipser's Intro to Theory of Comp
+
+# Same as samples/nfa_siper.tmf, but 'b' replaced with '127'
+# > max value for default CELL_TYPE is CHAR_MAX (127)
+# > Because epsilon and the max value of CELL_TYPE are hashed 
+#   together, an epsilon bit differentiates the two for the 
+#   transition fetching function (Trans_get in auto.c)
+#
+# This test is to ensure epsilon and 127 (assuming CELL_TYPE
+# in auto.h is signed char) are properly differentiated.
+
+start: q1;
+final: q1;
+
+q1: 
+	127 > q2;
+	> q3;
+q2:
+	a > q2;
+	a,127 > q3;
+q3:
+	a > q1;
+

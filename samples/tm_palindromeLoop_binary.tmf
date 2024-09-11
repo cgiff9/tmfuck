@@ -1,0 +1,29 @@
+# Determines if a string of 0's and 1's is a palindrome
+# 
+# In tmf, Turing Machines may still use the stack :)
+
+final: qf;
+
+# push tape to stack
+# (tape is reverse on the stack)
+q0: 
+	0 > q0 (R,>0);
+	1 > q0 (R,>1);
+	_ > q1 (L);
+
+# scrub left to beginning
+q1:
+	0,1 > q1 (L);
+	_ > q2(R);
+
+# if every tape cell matches
+# the stack top, accept
+q2:
+	0 > q2 (R,0>);
+	1 > q2 (R,1>);
+	#_ > qf;    # halt on palindrome
+	_ > q3(L); # run forever on palindrome :P
+
+q3:
+	0,1 > q3(L);
+	_ > q0(R);

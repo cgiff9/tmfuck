@@ -1,2063 +1,390 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <stdint.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <errno.h>
+#include <limits.h>
+#include <xxhash.h>
+
 #include "auto.h"
-#include "regex.h"
+#include "block.h"
 #include "stack.h"
-#include "ops.h"
+#include "var.h"
 
-int flag_verbose = 0;
-double delay = 0;
-int execute = 0;
-char tm_blank = '_';
-char tm_bound = '\0';
-int tm_bound_halt = 0;
+#include "file.h"
 
-struct State *State_create(char *name)
+#include <limits.h>
+
+//CELL_TYPE CELL_MAX = (CELL_TYPE)PTRDIFF_MAX;
+//CELL_TYPE CELL_MAX = maxof(CELL_TYPE);
+//CELL_TYPE CELL_MIN = (issigned(CELL_TYPE)) ? -CELL_MAX-1 : 0;
+
+// Frees allocated memory of
+// all structures within Automaton
+size_t Automaton_free(struct Automaton *a0)
 {
-	struct State *state = malloc(sizeof(struct State));
-	if (state == NULL) {
-		fprintf(stderr, "Error allocating memory for state\n");
-		exit(EXIT_FAILURE);
-	}
-	state->num_trans = 0;
-	state->max_trans = 2;
-	state->trans = malloc(sizeof(struct Transition *) * state->max_trans);
-	if (state->trans == NULL) {
-		fprintf(stderr, "Error allocating memory for trans array within state\n");
-		exit(EXIT_FAILURE);
-	}
-	state->name = strdup(name);
-	state->start = 0;
-	state->final = 0;
-	state->reject = 0;
-	state->cmd = NULL;
-	//state->cmd_args = NULL;
-	state->cmd_args = malloc(sizeof(char *));
-	state->cmd_args[0] = NULL;
-	//state->cmd_args[0] = malloc(sizeof(char));
-	//state->cmd_args[0][0] = '\0';
-	//printf("BLAHHH: %d\n", strlen(state->cmd_args[0]));
-	return state;
+	return Block_free(&a0->states)
+		+ Block_free(&a0->trans)
+		+ Block_free(&a0->vars)
+		+ Block_free(&a0->names)
+		+ Block_free(&a0->stacks)
+		+ Block_free(&a0->tapes)
+
+		+ Stack_free(&a0->finals)
+		+ Stack_free(&a0->rejects)
+		+ Stack_free(&a0->alphabet)
+		+ Stack_free(&a0->delims);
+
+//	Stack_free(&a0->symgroups);
+//	Stack_free(&a0->vargroups);
 }
 
-struct Automaton *Automaton_create()
+// Creates new automaton
+// > init storage blocks for states, transitions, and variables
+// > init reference stacks for final and reject states
+// > init reference stacks for transition symbol symgroups and vargroups
+//
+// Returns automaton
+struct Automaton Automaton_init()
 {
-	struct Automaton *automaton = malloc(sizeof(struct Automaton));
-	if (automaton == NULL) {
-		fprintf(stderr, "Error allocating memory for automaton\n");
-		exit(EXIT_FAILURE);
-	}
-	automaton->len = 0;
-	automaton->max_len = 2;
-	automaton->states = malloc(sizeof(struct State *) * automaton->max_len);
-	if (automaton->states == NULL) {
-		fprintf(stderr, "Error allocating memory for states array in automaton\n");
-		exit(EXIT_FAILURE);
-	}
-	return automaton;
+	struct Automaton a0;
+	a0.states = Block_init(STATE);
+	a0.trans = Block_init(TRANS);
+	a0.vars = Block_init(VAR);
+	a0.names = Block_init(NAME);
+	a0.stacks = Block_init(STACK);
+	a0.tapes = Block_init(TAPE);
+
+	a0.start = NULL;
+	a0.finals = Stack_init(STATEPTR);
+	a0.rejects = Stack_init(STATEPTR);
+
+	a0.alphabet = Stack_init(CELL);
+	a0.delims = Stack_init(CELL);
+
+//	a0.symgroups = Stack_init(CELL);
+//	a0.vargroups = Stack_init(VARPTR);
+
+	a0.tm = 0;
+	a0.pda = 0;
+	a0.regex = 0;
+	a0.epsilon = 0;
+	a0.strans = 0;
+	a0.epsilon_loops = 0;
+
+	return a0;
 }
 
-struct State* State_get(struct Automaton *automaton, char *name)
+// Adds name to Name Block in Automaton
+// > allows 'dynamic' string length while
+//   minimizing malloc calls (and avoiding realloc)
+// > Name Block contains array (or 'strips') of
+//   multiple strings, each separated by '\0'
+// > Does not check for duplicates
+// > Stores names for Var and State structs
+//   (see block.c for more details)
+//
+// Return pointer to newly added name string
+char *Name_add(struct Automaton *a0, char *name, int state)
 {
-	for (int i = 0; i < automaton->len; i++) {
-		if (strcmp(automaton->states[i]->name, name) == 0) {
-			return automaton->states[i];
+	struct Block *block = &a0->names;
+	
+	ptrdiff_t namelen = strlen(name) + 1; // plus null term
+	if (state && namelen > longest_name) longest_name = namelen;
+
+	//struct Stack *datastacks = block->data.elem;
+	//struct Stack *strip = &datastacks[block->data.size-1];
+
+	struct Stack *strip = Stack_get(&block->data, block->data.size-1);
+
+	// If no more room for name in this strip, add new strip
+	while (strip->max - strip->size < namelen) {
+
+		block->size = block->max;
+		strip->size = strip->max;
+
+		Block_grow(block);
+		
+		//datastacks = block->data.elem;
+		//strip = &datastacks[block->data.size-1];
+		strip = Stack_get(&block->data, block->data.size-1);
+	}
+
+	char *namechars = strip->elem;
+	char *newname = &namechars[strip->size];
+
+	strcat(newname, name);
+	
+	strip->size += namelen;
+	block->size += namelen;
+	return newname;
+}
+
+
+// Adds state to automaton
+// > assigns new state next open index in automaton's states block
+// > hashes state by its name and adds to **hash table in block
+// > grows automaton's state block if necessary
+//
+// Returns pointer to new/existing state
+struct State *State_add(struct Automaton *a0, char *name)
+{
+	struct Block *block = &a0->states;
+	struct State **hash_elem = block->hash.elem;
+
+	XXH64_hash_t check = XXH3_64bits(name, strlen(name)) % block->hashmax;
+	XXH64_hash_t offset = check;
+	
+	struct State *statecheck = hash_elem[offset];
+
+	// open-addressing hash table in states block
+	// > very basic collision mitigation (checks next neighbor til empty)
+	while (statecheck != NULL) {
+		if (!strcmp(statecheck->name, name)) return statecheck;
+		if (++offset == block->hashmax) offset = 0;
+		statecheck = hash_elem[offset];
+	}
+
+	if (block->size >= block->max) {
+		Block_grow(block);
+		hash_elem = block->hash.elem;
+
+		// Rehash new state's name after block **hash resize
+		check = XXH3_64bits(name, strlen(name)) % block->hashmax;
+		offset = check;
+
+		statecheck = hash_elem[offset];
+		while (statecheck != NULL) {
+			if (++offset == block->hashmax) offset = 0;
+			statecheck = hash_elem[offset];
 		}
 	}
+
+	/*struct Stack *datastacks = block->data.elem;
+	struct Stack *strip = &datastacks[block->data.size-1];
+	struct State *states = strip->elem;	
+	struct State *newstate = &states[strip->size++];*/
+
+	struct Stack *strip = Stack_get(&block->data, block->data.size-1);
+	struct State *newstate = Stack_get(strip, strip->size++);
+
+	hash_elem[offset] = newstate;
+	
+	newstate->start = 0;
+	newstate->final = 0;
+	newstate->reject = 0;
+	newstate->epsilon = 0;
+	newstate->syms = 0;
+	newstate->epsilon_mark = 0;
+	newstate->exec = 0;
+
+	newstate->name = Name_add(a0, name, 1);
+
+	block->size++;
+
+	return newstate;
+}
+
+// Takes parent state, symbol and return matching transition
+// > if ntrans > 0, that indicates a previous run of Trans_get
+//   found a transition with a sibling (shared pstate & sym) and
+//   must hunt further down the block to find the sibling on this try
+//
+// Returns transition
+struct Trans *Trans_get(struct Automaton *a0, struct State *pstate, CELL_TYPE inputsym, XXH64_hash_t *offset_prev, int epsilon)
+{
+	struct Block *block = &a0->trans;
+	struct Trans **hash_elem = block->hash.elem;
+
+	// If previous offset (previous sibling trans), start
+	// searching from that hash index
+	XXH64_hash_t offset = 0;
+	if (*offset_prev == block->hashmax) {
+		
+		// Pre-mixing voodoo... it just made retrieval faster
+		/*uintptr_t hashbuff[TRANS_HASHBUFF_LEN] = { 
+			(uintptr_t) pstate, (uintptr_t) inputsym,
+			~(uintptr_t) pstate ^ (uintptr_t) inputsym,
+			(uintptr_t) pstate ^ ~(uintptr_t) inputsym,
+			(uintptr_t) pstate ^ (uintptr_t) inputsym,
+			~(uintptr_t) pstate ^ ~(uintptr_t) inputsym,
+			~(uintptr_t) pstate, ~(uintptr_t) inputsym,
+		};*/
+		
+		TRANS_HASHBUFF_TYPE hashbuff[TRANS_HASHBUFF_LEN] = { 
+			(TRANS_HASHBUFF_TYPE) pstate, 
+			(TRANS_HASHBUFF_TYPE) inputsym,
+		};
+
+		XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+		offset = check;
+	} else {
+		offset = *offset_prev;
+		if (++offset == block->hashmax) offset = 0;
+	}
+
+	struct Trans *transcheck = hash_elem[offset];
+	while (transcheck) {
+		if (transcheck->pstate == pstate && 
+				transcheck->inputsym == inputsym &&
+				transcheck->epsilon == epsilon) {
+				
+			*offset_prev = offset;
+			return transcheck;
+		}
+		if (++offset == block->hashmax) offset = 0;
+		transcheck = hash_elem[offset];
+	}
+	
+	*offset_prev = block->hashmax;
 	return NULL;
 }
 
-void State_name_add(struct Automaton *automaton, char *name)
+// Adds transition to automaton
+// > assigns new transition the next open index in automaton's trans block
+// > hashes transitions by its parent state and sym, both casted as (uintptr)
+//   and fed in a buffer to xxHash
+//
+// Returns pointer to new/existing transition
+struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State *dstate, 
+		CELL_TYPE *inputsym, CELL_TYPE *popsym, CELL_TYPE *pushsym, CELL_TYPE *dir, CELL_TYPE *writesym)
 {
-	struct State *test = State_get(automaton, name);
-	if (test == NULL) {
-		struct State *new_state = State_create(name);
-		automaton->len++;
-		if (automaton->len > automaton->max_len) { 
-			automaton->max_len *= 2;
-			automaton->states = realloc(automaton->states, sizeof(struct State *) * automaton->max_len);
-			if (automaton->states == NULL) {
-				fprintf(stderr, "Memory error adding state name to automaton\n");
-				exit(EXIT_FAILURE);
-			}
-		}
-		automaton->states[automaton->len-1] = new_state;
+	struct Block *block = &a0->trans;
+	struct Trans **hash_elem = block->hash.elem;
 
-	}
-}
-
-int State_add(struct Automaton *automaton, struct State *state)
-{
-	for (int i = 0; i < automaton->len; i++) {
-		if (automaton->states[i] == state) return 0;
-	}
-	automaton->len++;
-	if (automaton->len > automaton->max_len) {
-		automaton->max_len *= 2;
-		automaton->states = realloc(automaton->states, sizeof(struct State *) * automaton->max_len);
-		if (automaton->states == NULL) {
-			fprintf(stderr, "Memory error adding state name to automaton\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-	automaton->states[automaton->len-1] = state;
-	return 1;
-}
-
-struct Transition *Transition_create(char symbol, struct State *state, char readsym, char writesym, char direction)
-{
-	struct Transition *trans = malloc(sizeof(struct Transition));
-	if (trans == NULL) {
-		fprintf(stderr, "Memory error creating transition\n");
-		exit(EXIT_FAILURE);
-	}
-	trans->symbol = symbol;
-	trans->state = state;
-	trans->readsym = readsym;
-	trans->writesym = writesym;
-	trans->direction = direction;
-	trans->cmd = NULL;
-	return trans;
-}
-
-void Transition_add(struct State *state, struct Transition *trans)
-{
-	state->num_trans++;
-	if (state->num_trans > state->max_trans) {
-		state->max_trans *= 2;
-		state->trans = realloc(state->trans, sizeof(struct Trans *) * state->max_trans);
-		if (state->trans == NULL) {
-			fprintf(stderr, "Memory error adding state transition\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-	state->trans[state->num_trans-1] = trans;
-}
-
-void State_destroy(struct State *state)
-{
-	for (int i = 0; i < state->num_trans; i++) {
-		if (state->trans[i]->cmd != NULL) free(state->trans[i]->cmd);
-		free(state->trans[i]);
-	}
+	unsigned char input_bit = 0;
+	CELL_TYPE inputsym_tmp = (input_bit = (inputsym && 1)) ? *inputsym : CELL_MAX;
 	
-	if (state->cmd != NULL) free(state->cmd);
-	for (int i = 0; state->cmd_args[i] != NULL; i++) {
-		free(state->cmd_args[i]);
-	}
-	free(state->cmd_args);
-	free(state->name);
-	free(state->trans);
-	free(state);
-}
+	/*
+	uintptr_t hashbuff[TRANS_HASHBUFF_LEN] = { 
+		(uintptr_t) pstate, (uintptr_t) inputsym_tmp,
+		~(uintptr_t) pstate ^ (uintptr_t) inputsym_tmp,
+		(uintptr_t) pstate ^ ~(uintptr_t) inputsym_tmp,
+		(uintptr_t) pstate ^ (uintptr_t) inputsym_tmp,
+		~(uintptr_t) pstate ^ ~(uintptr_t) inputsym_tmp,
+		~(uintptr_t) pstate, ~(uintptr_t) inputsym_tmp,
+	};*/
 
-// Destroy automaton, states, and transitions
-void Automaton_destroy(struct Automaton *automaton)
-{
-	for (int i = 0; i < automaton->len; i++) {
-		State_destroy(automaton->states[i]);
-	}
-	free(automaton->states);
-	free(automaton);
-}
+	TRANS_HASHBUFF_TYPE hashbuff[TRANS_HASHBUFF_LEN] = { 
+		(TRANS_HASHBUFF_TYPE) pstate, 
+		(TRANS_HASHBUFF_TYPE) inputsym_tmp,
+	};
 
-// Destroy automaton struct only
-void Automaton_clear(struct Automaton *automaton)
-{
-	free(automaton->states);
-	free(automaton);
-}
-
-void State_print(struct State *state)
-{
-	printf("%s: ", state->name);
-	if (state->num_trans != 0) {
-		for (int i = 0; i < state->num_trans-1; i++) {
-			struct Transition *t0 = state->trans[i];
-			if (t0->readsym == '\0' && t0->writesym == '\0' && t0->direction == '\0') {
-				if (isspace(state->trans[i]->symbol))
-					printf("'%c'>%s, ", t0->symbol, t0->state->name);
-				else
-					printf("%c>%s, ", t0->symbol, t0->state->name);
-			} else if (t0->direction != '\0' && t0->writesym != '\0') {
-				if (isspace(t0->symbol))
-					printf("'%c'>%s (>%c,%c), ", t0->symbol, t0->state->name, 
-						t0->writesym, t0->direction);
-				else
-					printf("%c>%s (>%c,%c), ", t0->symbol, t0->state->name,
-						t0->writesym, t0->direction);
-			} else if (t0->direction != '\0') {
-				if (isspace(t0->symbol))
-					printf("'%c'>%s (%c), ", t0->symbol, t0->state->name, t0->direction);
-				else
-					printf("%c>%s (%c), ", t0->symbol, t0->state->name, t0->direction);
-			} else {
-				if (isspace(t0->symbol))
-					printf("'%c'>%s (%c>%c), ", t0->symbol, t0->state->name, 
-						t0->readsym, t0->writesym);
-				else
-					printf("%c>%s (%c>%c), ", t0->symbol, t0->state->name,
-						t0->readsym, t0->writesym);
-			}
-		}
-		struct Transition *t0 = state->trans[state->num_trans-1];
-		if (t0->readsym == '\0' && t0->writesym == '\0' && t0->direction == '\0') {
-			if (isspace(t0->symbol)) {
-				printf("'%c'>%s", t0->symbol, t0->state->name);
-			} else {
-				printf("%c>%s", t0->symbol, t0->state->name);
-			}
-		} else if (t0->direction != '\0' && t0->writesym != '\0') {
-			if (isspace(t0->symbol))
-				printf("'%c'>%s (>%c,%c)", t0->symbol, t0->state->name, 
-					t0->writesym, t0->direction);
-			else
-				printf("%c>%s (>%c,%c)", t0->symbol, t0->state->name,
-					t0->writesym, t0->direction);
-		} else if (t0->direction != '\0') {
-				if (isspace(t0->symbol))
-					printf("'%c'>%s (%c)", t0->symbol, t0->state->name, t0->direction);
-				else
-					printf("%c>%s (%c)", t0->symbol, t0->state->name, t0->direction);
-		} else {
-			if (isspace(t0->symbol)) {
-				printf("'%c'>%s (%c>%c)", t0->symbol, t0->state->name,
-					t0->readsym, t0->writesym);
-			} else {
-				printf("%c>%s (%c>%c)", t0->symbol, t0->state->name,
-					t0->readsym, t0->writesym);
-			}
-		}
-	}
-	if (state->final) printf(" [F]");
-	if (state->reject) printf(" [R]");
-	if (state->start) printf(" [S]");
-	if (execute && state->cmd) printf(" $(%s)", state->cmd);
-
-	printf("\n");
-}
-
-void Automaton_print(struct Automaton *automaton)
-{
-	for (int i = 0; i < automaton->len; i++) {
-		State_print(automaton->states[i]);
-	}
-}
-
-int isnamechar(char c)
-{
-	char *syms="~`!@%^&*-_+={}[]\\|\"<./?";
-	int res = 0;
-	for (int i = 0; syms[i] != '\0'; i++) {
-		if (c == syms[i]) {
-			res = 1;
-			break;
-		}
-	}
-	return res || isalnum(c);
-
-}
-
-static int State_compare(const void *a, const void *b)
-{
-	struct State *s0 = (struct State *)a;
-	struct State *s1 = (struct State *)b;
-
-	return strcmp(*(char *const*)s0->name, *(char *const*)s1->name);
-}
-
-void State_cmd_run(struct State *state) {
-  pid_t pid;
-  int status;
-  pid_t ret;
-  char *env[] = { (char*)NULL };
-  extern char **environ;
- 
-  pid = fork();
-  if (pid == -1) {
-	fprintf(stderr, "Error forking command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
-  } else if (pid != 0) {
-    while ((ret = waitpid(pid, &status, 0)) == -1) {
-      if (errno != EINTR) {
-		fprintf(stderr, "Error returned from command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
-        exit(EXIT_FAILURE);
-        break;
-      }
-    }
-    if ((ret == 0) ||
-        !(WIFEXITED(status) && !WEXITSTATUS(status))) {
-      /* Report unexpected child status */
-    }
-  } else {
-	if (execvp(state->cmd_args[0], state->cmd_args) == -1) {
-	  fprintf(stderr, "Error executing command for %s: %s\n\t%s\n", state->name, state->cmd_args[0], strerror(errno));
-      _Exit(127);
-    }
-  }
-}
-
-int State_cmd_arg_add(struct State *cmdstate, int arg_index, int j, int k, int first)
-{
-	if (first) {
-		cmdstate->cmd_args = realloc(cmdstate->cmd_args, sizeof(char *) * (arg_index+2));
-		if (cmdstate->cmd_args == NULL) {
-			fprintf(stderr, "Error allocating first pointer to command args\n");
-			exit(EXIT_FAILURE);
-		}
+	XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+	XXH64_hash_t offset = check;
+	
+	unsigned char pop_bit, push_bit, write_bit = 0;
+	CELL_TYPE popsym_tmp = (pop_bit = (popsym && 1)) ? *popsym : CELL_MAX;
+	CELL_TYPE pushsym_tmp = (push_bit = (pushsym && 1)) ? *pushsym : CELL_MAX;
+	CELL_TYPE dir_tmp = (dir && *dir) ? *dir : 0;
+	CELL_TYPE writesym_tmp = (write_bit = (writesym && 1)) ? *writesym : CELL_MAX;
+	
+	struct Trans *transcheck = hash_elem[offset];
+	
+	while (transcheck != NULL) {
+		if (transcheck->pstate == pstate && 
+				((transcheck->epsilon == !input_bit) && (transcheck->inputsym == inputsym_tmp))) {
 		
-		cmdstate->cmd_args[arg_index] = malloc(sizeof(char) * (k+2));
-		if (cmdstate->cmd_args[arg_index] == NULL) {
-			fprintf(stderr, "Error allocating string for new command arg\n");
-			exit(EXIT_FAILURE);
+			if (transcheck->dstate == dstate &&
+					((transcheck->pop == pop_bit) && (transcheck->popsym == popsym_tmp)) &&
+					((transcheck->push == push_bit) && (transcheck->pushsym == pushsym_tmp)) &&
+					(transcheck->dir == dir_tmp) &&
+					((transcheck->write == write_bit) && (transcheck->writesym == writesym_tmp))) {
+				return transcheck;
+				printf("dupe\n");
+			} else {
+				transcheck->strans = 1; // another trans shares this sym/pstate
+				a0->strans = 1;
+			}
 		}
+
+		if (++offset == block->hashmax) offset = 0;
+		transcheck = hash_elem[offset];
+	}
+
+	if (block->size >= block->max) {
+		Block_grow(block);
+		hash_elem = block->hash.elem;
+
+		check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+		offset = check;
 		
-		cmdstate->cmd_args[arg_index][0] = '\0';
+		transcheck = hash_elem[offset];
+		while (transcheck != NULL) {
+			if (++offset == block->hashmax) offset = 0;
+			transcheck = hash_elem[offset];
+		}
+	}
+
+	/*struct Stack *datastacks = block->data.elem;
+	struct Stack *strip = &datastacks[block->data.size-1];
+	struct Trans *trans = strip->elem;
+	struct Trans *newtrans = &trans[strip->size++];*/
+
+	struct Stack *strip = Stack_get(&block->data, block->data.size-1);
+	struct Trans *newtrans = Stack_get(strip, strip->size++);
+
+	hash_elem[offset] = newtrans;
+
+	// Set parent, destination states
+	newtrans->pstate = pstate;
+	newtrans->dstate = dstate;
+	
+	// Set symbols and symbol indicator bits
+	newtrans->epsilon = !input_bit;
+	newtrans->inputsym = inputsym_tmp;
+	newtrans->pop = pop_bit;
+	newtrans->popsym = popsym_tmp;
+	newtrans->push = push_bit;
+	newtrans->pushsym = pushsym_tmp;
+	newtrans->write = write_bit;
+	newtrans->writesym = writesym_tmp;
+	newtrans->dir = dir_tmp;
+
+	// Initialize other indicator bits
+	newtrans->reject = 0;
+	newtrans->epsilon_loop = 0;
+	newtrans->epsilon_mark = 0;
+	newtrans->strans = 0;
+	newtrans->exec = 0;
+	//newtrans->symgroup = 0;
+	//newtrans->vargroup = 0;
+
+	if (input_bit) {
+		pstate->syms = 1;
+	
+		// Only check for new longest_sym if not an epsilon transition
+		// > E-trans share a hash with input symbol CELL_MAX, but are
+		//   printed as empty space in verbose mode.
+		unsigned int new_longest_sym = num_places(newtrans->inputsym);
+		if (new_longest_sym > longest_sym) longest_sym = new_longest_sym;
+
 	} else {
-		cmdstate->cmd_args[arg_index] = realloc(cmdstate->cmd_args[arg_index],
-			sizeof(char) * (strlen(cmdstate->cmd_args[arg_index]) + k + 2));
-		if (cmdstate->cmd_args == NULL) {
-			fprintf(stderr, "Error allocating new pointer to command args\n");
-			exit(EXIT_FAILURE);
-		}
+		pstate->epsilon = 1;
 	}
-	strncat(cmdstate->cmd_args[arg_index], cmdstate->cmd+j, k);
+
+	block->size++;
 	
-	return 0;
+	return newtrans;
 }
 
-struct Automaton *Automaton_import(char *filename) 
+// sets start state flag, unsets existing start state's flag
+void set_start(struct Automaton *a0, struct State *s0)
 {
-	FILE *fp;
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-
-	fp = fopen(filename, "r");
-	if (fp == NULL) { 
-		fprintf(stderr, "Error opening %s\n", filename);
-		exit(EXIT_FAILURE);
-	}
-
-	char name[STATE_NAME_MAX], 
-		 state[STATE_NAME_MAX],
-		 special[STATE_NAME_MAX];
-	char symbol, readsym, writesym, direction;
-	char alphabet[100];
-	int linenum=1;
-	int linechar;
-	int final_exists = 0;
-	int brackets;
-
-	int mystate=1;
-	int comment_state;
-	struct Stack *symstack = Stack_create();
-	struct Automaton *automaton = Automaton_create();
-	while ((read = getline(&line, &len, fp)) != -1) {
-			int i = 0;
-			int j = 0;
-			int k = 0;
-			int spaces = 0;
-			linechar = 1;
-			
-			for (i = 0; line[i] != '\0'; i++) {
-				//printf("mystate: %d, line[i]: %c\n", mystate, line[i]);
-				
-				switch (mystate) {
-					// Ensure state name is at least one char
-					case 1:
-						if(isnamechar(line[i])) {
-							j=i;
-							k++;
-							mystate = 11;
-							//mystate = 4;
-						} else if (isspace(line[i])) {
-							spaces++;
-							mystate = 1;
-						} else if (line[i] == '#') {
-							comment_state = 3;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// Finish acquiring state name string
-					case 2:
-						if (line[i] == ':') {
-							if (!strcmp(name, "start") || 
-								!strcmp(name, "final") ||
-								!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank") ||
-								!strcmp(name, "bound")) {
-								mystate = 23;	
-							} else {
-								State_name_add(automaton, name);
-								mystate = 3;
-							}
-						} else if (isspace(line[i])) {
-							mystate = 2;
-						} else if (line[i] == '#') {
-							comment_state = 2;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// Begin parsing state transitions
-					case 3:
-						if (isnamechar(line[i])) {
-							j = i;
-							k = 1;
-							symbol = line[i];
-							Stack_push(symstack, symbol);
-							mystate = 4;
-						// For empty string transitions
-						} else if (line[i] == '>') {
-							symbol = '\0';
-							Stack_push(symstack, symbol);
-							mystate = 5;
-						} else if (line[i] == '\'') {
-							mystate = 9;
-						} else if (isspace(line[i])) {
-							mystate = 3;
-						} else if (line[i] == '$') {
-							//brackets = 1;
-							mystate = 100;
-						} else if (line[i] == '#') {
-							comment_state = 3;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// Set symbol for state transition
-					case 4:
-						if (line[i] == '>') {
-							j = i + 1;
-							mystate = 5;
-						} else if (line[i] == ',') {
-							mystate = 17;
-						} else if (isspace(line[i])) {
-							mystate = 14;
-						} else if (line[i] == ':') {
-							*name = '\0';
-							strncat(name, line+j, k);
-							
-							if (!strcmp(name, "start") || 
-								!strcmp(name, "final") ||
-								!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank") ||
-								!strcmp(name, "bound")) {
-								mystate = 23;
-							} else {
-								State_name_add(automaton, name);
-								mystate = 3;
-							}
-							Stack_destroy(symstack);
-							symstack =  Stack_create();
-						} else if (isnamechar(line[i])) {
-							k++;
-							Stack_destroy(symstack);
-							symstack =  Stack_create();
-							mystate=11;
-						} else if (line[i] == '$') {
-							//brackets = 1;
-							mystate = 100;
-						} else if (line[i] == '#') {
-							comment_state = 14;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// Ensure destination state in transition consists of at least one char
-					case 5:
-						if (isnamechar(line[i])) {
-							j = i;
-							k = 1;
-							mystate = 6;
-						} else if (isspace(line[i])) {
-							//mystate = 15;
-							mystate = 5;
-						} else if (line[i] == '#') {
-							comment_state = 5;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// Finish acquiring state name string for the transition
-					case 6:
-						if (isnamechar(line[i])) {
-							k++;
-							mystate = 6;
-						} else if (line[i] == ';') {
-							*state = '\0';
-							strncat(state, line+j, k);
-
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
-								Transition_add(from, new_trans);
-							}
-							Stack_destroy(symstack);
-							symstack = Stack_create(symstack);
-
-							mystate = 3;
-						// Allow multiple state transitions per symbol
-						} else if (line[i] == ',') {
-							*state = '\0';
-							strncat(state, line+j, k);
-							//j = i + 1;
-
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
-								Transition_add(from, new_trans);
-							}
-
-							mystate = 5;
-						} else if (isspace(line[i])) {
-							*state = '\0';
-							strncat(state, line+j, k);
-							mystate = 16;
-						} else if (line[i] == '(') {
-							*state = '\0';
-							strncat(state, line+j, k);
-							
-							mystate = 30;
-						} else if (line[i] == '#') {
-							*state = '\0';
-							strncat(state, line+j, k);
-							comment_state = 16;
-							mystate = 7;
-						} else mystate = 8;
-						break;;
-					// COMMENT HANDLING
-					// comments can come after any line except for
-					// open-ended single-quoted characters (' or 'a) 
-					// Note: State names may not be split over lines. Why
-					//       would anyone want that? :P
-					// TODO: multi-line comments! -_-
-					case 7:
-						if (line[i] == '\n') {
-							//mystate = 3;
-							mystate = comment_state;
-						} else mystate = 7;
-						break;
-					// Error
-					case 8:
-						char highlight=line[linechar-2];
-						if (highlight == '\n') highlight = ' ';
-						fprintf(stderr,"Error on line %d, char [%d]:\n%.*s[%c]%s", 
-							linenum, linechar -1, linechar-2, line, highlight, line+linechar-1);
-						if (line[linechar-2] == '\n') putchar('\n');
-						free(line);
-						Stack_destroy(symstack);
-						fclose(fp);
-						Automaton_destroy(automaton);
-						exit(EXIT_FAILURE);
-					// char specified by single quotes, ie. 'a',' '
-					case 9:
-						symbol = line[i];
-						Stack_push(symstack, symbol);
-						mystate = 10;
-						break;
-					// end single quote
-					case 10:
-						if (line[i] == '\'') {
-							mystate = 4;
-						} else mystate = 8;
-						break;
-					// space case for state 1
-					case 11:
-						if (isnamechar(line[i])) {
-							k++;
-							mystate = 11;
-						} else if (isspace(line[i])) {
-							*name = '\0';
-							strncat(name,line+j,k);
-							mystate = 2;
-						} else if (line[i] == ':') {
-							*name = '\0';
-							strncat(name, line+j, k);
-							
-							spaces = 0;
-							if (!strcmp(name, "start") || 
-								!strcmp(name, "final") ||
-								!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank") ||
-								!strcmp(name, "bound")) {
-								mystate = 23;	
-							} else {
-								State_name_add(automaton, name);
-								mystate = 3;
-							}
-						} else if (line[i] == '#') {
-							*name = '\0';
-							strncat(name,line+j,k);
-							comment_state = 2;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 2
-					case 12:
-						spaces++;
-						if (isnamechar(line[i])) {
-							mystate = 12;
-						} else if (isspace(line[i])) {
-							mystate = 3;
-						} else if (line[i] == '#') {
-							comment_state = 3;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 3
-					case 13:
-						spaces++;
-						if (isspace(line[i])) {
-							j = i + 1;
-							mystate = 13;
-						} else if (line[i] == '\'') {
-							spaces = 0;
-							mystate = 9;
-						} else if (isnamechar(line[i])) {
-							symbol = line[i];
-							Stack_push(symstack, symbol);
-							spaces = 0;
-							mystate = 4;
-						} else if (line[i] == '>') {
-							j = i + 1;
-							symbol = '\0';
-							spaces = 0;
-							mystate = 5;
-						} else if (line[i] == '#') {
-							comment_state = 13;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 4
-					case 14:
-						spaces++;
-						if (isspace(line[i])) {
-							mystate = 14;
-						} else if (line[i] == ',') {
-							mystate = 17;
-						} else if (line[i] == '>') {
-							j = i + 1;
-							mystate = 5;
-							spaces = 0;
-						} else if (line[i] == ':') {
-							*name = '\0';
-							strncat(name, line+j, k);
-							if (!strcmp(name, "start") || 
-								!strcmp(name, "final") ||
-								!strcmp(name, "reject")) {
-								mystate = 20;
-							} else if (!strcmp(name, "blank") ||
-								!strcmp(name, "bound")) {
-								mystate = 23;								
-							} else {
-								State_name_add(automaton, name);
-								mystate = 3;
-							}
-							Stack_destroy(symstack);
-							symstack =  Stack_create();
-						} else if (line[i] == '$') {
-							//brackets = 1;
-							mystate = 100;
-						} else if (line[i] == '#') {
-							comment_state = 14;
-							mystate = 7;
-						} else
-							mystate = 8;
-						break;
-					// space case for state 5
-					case 15:
-						spaces++;
-						if (isspace(line[i]))
-							mystate = 15;
-						else if (isnamechar(line[i])) {
-							j = i;
-							k = 1;
-							spaces = 0;
-							mystate = 6;
-						} else if (line[i] == '#') {
-							comment_state = 15;
-							mystate = 7;
-						} else 
-							mystate = 8;
-						break;
-					// space case for state 6
-					case 16:
-						spaces++;
-						if (isspace(line[i]))
-							mystate = 16;
-						else if (line[i] == ',') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
-								Transition_add(from, new_trans);
-							}
-							spaces = 0;
-							mystate = 5;
-						} else if (line[i] == ';') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symstack->stack[f], to, '\0', '\0', '\0');
-								Transition_add(from, new_trans);
-							}
-							Stack_destroy(symstack);
-							symstack = Stack_create(symstack);
-							spaces = 0;							
-							mystate = 3;
-						} else if (line[i] == '(') {
-							mystate = 30;
-						} else if (line[i] == '#') {
-							comment_state = 16;
-							mystate = 7;
-						} else 
-							mystate = 8;
-						break;
-					// prevent trailing comma after listed chars for transitions
-					case 17:
-						spaces++;
-						if (isspace(line[i])) {
-							j = i + 1;
-							mystate = 17;
-						} else if (line[i] == '\'') {
-							spaces = 0;
-							mystate = 9;
-						} else if (isnamechar(line[i])) {
-							symbol = line[i];
-							Stack_push(symstack, symbol);
-							spaces = 0;
-							mystate = 4;
-						} else if (line[i] == '#') {
-							comment_state = 17;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// line represents the start state
-					case 20:
-						if (isspace(line[i])) {
-							mystate = 20;
-						} else if (isnamechar(line[i])) {
-							j=i;
-							k=1;
-							mystate = 21;
-						} else if (line[i] == '#') {
-							comment_state = 20;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 21:
-						if (isnamechar(line[i])) {
-							k++;
-							mystate = 21;
-						} else if (isspace(line[i])) {
-							*special = '\0';
-							strncat(special,line+j,k);
-							mystate = 22;
-						} else if (line[i] == ',' || line[i] == ';') {
-							//char special[STATE_NAME_MAX];
-							*special = '\0';
-							strncat(special,line+j,k);
-							State_name_add(automaton, special);
-							struct State *new = State_get(automaton, special);
-							
-							if (line[i] == ',') {
-								mystate = 20;
-							} else mystate = 3;
-							
-							if (!strcmp(name, "start")) {
-								if (automaton->start != NULL)
-									automaton->start->start = 0;
-								automaton->start = new;
-								new->start = 1;
-							} else if (!strcmp(name, "final")) {
-								if (new->reject) {
-									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
-									/*
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-									*/
-									mystate = 8;
-								}
-								new->final=1;
-								final_exists = 1;
-							} else if (!strcmp(name, "reject")) {
-								if (new->final) {
-									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
-									/*
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-									*/
-									mystate = 8;
-								}
-								new->reject=1;
-							}
-						} else if (line[i] == '#') {
-							*special = '\0';
-							strncat(special,line+j,k);
-							comment_state = 22;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 22:
-						if (isspace(line[i])) {
-							mystate = 22;
-						} else if (line[i] == ',' || line[i] == ';') {
-							State_name_add(automaton, special);
-							struct State *new = State_get(automaton, special);
-							
-							if (line[i] == ',') {
-								mystate = 20;
-							} else mystate = 3;
-							
-							if (!strcmp(name, "start")) {
-								if (automaton->start != NULL)
-									automaton->start->start = 0;
-								automaton->start = new;
-								new->start = 1;
-							} else if (!strcmp(name, "final")) {
-								if (new->reject) {
-									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
-									/*
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-									*/
-									mystate = 8;
-								}
-								new->final=1;
-								final_exists = 1;
-							} else if (!strcmp(name, "reject")) {
-								if (new->final) {
-									fprintf(stderr, "%s cannot be both a final and reject state\n", special);
-									/*
-									Stack_destroy(symstack);
-									free(line);
-									Automaton_destroy(automaton);
-									fclose(fp);
-									exit(EXIT_FAILURE);
-									*/
-									mystate = 8;
-								}
-								new->reject=1;
-							}
-						} else if (line[i] == '#') {
-							comment_state = 22;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// 23-27: line represents the custom blank character for tms
-					case 23:
-						if (isspace(line[i])) {
-							mystate = 23;
-						} else if (line[i] == '\'') { 
-							mystate = 24;
-						} else if (line[i] == ';') {
-							if (!strcmp(name, "blank")) tm_blank = ' ';
-							if (!strcmp(name, "bound")) tm_bound = '\0';
-							mystate = 3;
-						} else if (isnamechar(line[i])) { 
-							if (!strcmp(name, "blank")) tm_blank = line[i];
-							if (!strcmp(name, "bound")) {
-								if (line[i] == 'H') tm_bound_halt = 1;
-								else tm_bound = line[i];
-							}
-							mystate = 27;
-						} else if (line[i] == '#') {
-							comment_state = 23;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 24:
-						if (!strcmp(name, "blank")) tm_blank = line[i];
-						if (!strcmp(name, "bound")) {
-								if (line[i] == 'H') tm_bound_halt = 1;
-								else tm_bound = line[i];
-							}
-						mystate = 25;
-						break;
-					case 25:
-						if (line[i] == '\'') {
-							mystate = 26;
-						} else mystate = 8;
-						break;
-					case 26:
-						if (isspace(line[i])) {
-							mystate = 26;
-						} else if (line[i] == ';') {
-							mystate = 3;
-						} else if (line[i] == ',') {
-							mystate = 28;
-						} else if (line[i] == '#') {
-							comment_state = 26;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 27:
-						if (isspace(line[i])) {
-							mystate = 27;
-						} else if (line[i] == ';') {
-							mystate = 3;
-						} else if (line[i] == ',') {
-							mystate = 28;
-						} else if (line[i] == '#') {
-							comment_state = 27;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// prevent trailing comma
-					case 28:
-						if (isspace(line[i])) {
-							mystate = 28;
-						} else if (line[i] == '\'') { 
-							mystate = 24;
-						} else if (line[i] == ';') {
-							mystate = 8;
-						} else if (isnamechar(line[i])) { 
-							if (!strcmp(name, "blank")) tm_blank = line[i];
-							if (!strcmp(name, "bound")) {
-								if (line[i] == 'H') tm_bound_halt = 1;
-								else tm_bound = line[i];
-							}
-							mystate = 27;
-						} else if (line[i] == '#') {
-							comment_state = 28;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// BEGIN PDA EXTENSION
-					// empty 'read' char
-					case 30:
-						direction = '\0';
-						readsym = '\0';
-						writesym = '\0';
-						if (isspace(line[i])) {
-							mystate = 40;
-						} else if (line[i] == '>' ) {
-							readsym = '\0';
-							mystate = 31;
-						} else if (line[i] == 'R' || line[i] == 'L') {
-							direction = line[i];
-							mystate = 39;
-						} else if (isnamechar(line[i])) {
-							readsym = line[i];
-							mystate = 34;
-						} else if (line[i] == '\'') {
-							mystate = 50;
-						} else if (line[i] == '#') {
-							comment_state = 40;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 31:
-						if (isspace(line[i])) {
-							mystate = 41;
-						} else if (isnamechar(line[i])) {
-							writesym = line[i];
-							mystate = 32;
-						} else if (line[i] == '\'') {
-							mystate = 51;
-						} else if (line[i] == '#') {
-							comment_state = 41;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 32:
-						if (isspace(line[i])) {
-							mystate = 42;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == ',') {
-							mystate = 37;
-						} else if (line[i] == '#') {
-							comment_state = 42;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// State 33 represents the end of the pda specification
-					case 33:
-						if (isspace(line[i])) {
-							mystate = 43;
-						} else if (line[i] == ',') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-								Transition_add(from, new_trans);
-							}
-							
-							j = i + 1;
-							mystate = 5;
-						} else if (line[i] == ';') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-								Transition_add(from, new_trans);
-							}
-							Stack_destroy(symstack);
-							symstack = Stack_create(symstack);
-						
-							mystate = 3;
-						} else if (line[i] == '#') {
-							comment_state = 43;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// non-empty 'read' char
-					case 34:
-						if (isspace(line[i])) {
-							mystate = 44;
-						} else if (line[i] == '>') {
-							mystate = 35;
-						} else if (line[i] == '#') {
-							comment_state = 44;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 35:
-						if (isspace(line[i])) {
-							mystate = 45;
-						} else if (line[i] == ')') {
-							writesym = '\0';
-							mystate = 33;
-						} else if (isnamechar(line[i])) {
-							writesym = line[i];
-							mystate = 36;
-						} else if (line[i] == '\'') {
-							mystate = 55;
-						} else if (line[i] == '#') {
-							comment_state = 45;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 36:
-						if (isspace(line[i])) {
-							mystate = 46;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 46;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 37:
-						if (isspace(line[i])) {
-							mystate = 47;
-						} else if (line[i] == 'L' || line[i] == 'R') {
-							direction = line[i];
-							mystate = 38;
-						} else if (line[i] == '#') {
-							comment_state = 47;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 38:
-						if (isspace(line[i])) {
-							mystate = 48;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 48;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 39:
-						if (isspace(line[i])) {
-							mystate = 49;
-						} else if (line[i] == ',') {
-							mystate = 60;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 49;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 30
-					case 40:
-						if (isspace(line[i])) {
-							mystate = 40;
-						} else if (line[i] == '>' ) {
-							readsym = '\0';
-							mystate = 31;
-						} else if (line[i] == 'R' || line[i] == 'L') {
-							direction = line[i];
-							mystate = 39;
-						} else if (isnamechar(line[i])) {
-							readsym = line[i];
-							mystate = 34;
-						} else if (line[i] == '\'') {
-							mystate = 50;
-						} else if (line[i] == '#') {
-							comment_state = 40;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 31
-					case 41:
-						if (isspace(line[i])) {
-							mystate = 41;
-						} else if (isnamechar(line[i])) {
-							writesym = line[i];
-							mystate = 32;
-						} else if (line[i] == '\'') {
-							mystate = 51;
-						} else if (line[i] == '#') {
-							comment_state = 41;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 32
-					case 42:
-						if (isspace(line[i])) {
-							mystate = 42;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == ',') {
-							mystate = 37;
-						} else if (line[i] == '#') {
-							comment_state = 42;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 33
-					case 43:
-						if (isspace(line[i])) {
-							mystate = 43;
-						} else if (line[i] == ',') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-								Transition_add(from, new_trans);
-							}
-							
-							j = i + 1;
-							mystate = 5;
-						} else if (line[i] == ';') {
-							State_name_add(automaton, state);
-							struct State *from = State_get(automaton, name);
-							struct State *to = State_get(automaton, state);
-							for (int f = 0; f < symstack->len; f++) {
-								//printf("%c: from %s to %s\n", symstack->stack[f], name, state);
-								struct Transition *new_trans = Transition_create(symbol, to, readsym, writesym, direction);
-								Transition_add(from, new_trans);
-							}
-							Stack_destroy(symstack);
-							symstack = Stack_create(symstack);
-							
-							mystate = 3;
-						} else if (line[i] == '#') {
-							comment_state = 43;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 34
-					case 44:
-						if (isspace(line[i])) {
-							mystate = 44;
-						} else if (line[i] == '>') {
-							mystate = 35;
-						} else if (line[i] == '#') {
-							comment_state = 44;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 35
-					case 45:
-						if (isspace(line[i])) {
-							mystate = 45;
-						} else if (line[i] == ')') {
-							writesym = '\0';
-							mystate = 33;
-						} else if (isnamechar(line[i])) {
-							writesym = line[i];
-							mystate = 36;
-						} else if (line[i] == '\'') {
-							mystate = 55;
-						} else if (line[i] == '#') {
-							comment_state = 45;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 36
-					case 46:
-						if (isspace(line[i])) {
-							mystate = 46;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 46;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 37
-					case 47:
-						if (isspace(line[i])) {
-							mystate = 47;
-						} else if (line[i] == 'L' || line[i] == 'R') {
-							direction = line[i];
-							mystate = 38;
-						} else if (line[i] == '#') {
-							comment_state = 47;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 48:
-						if (isspace(line[i])) {
-							mystate = 48;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 48;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 49:
-						if (isspace(line[i])) {
-							mystate = 49;
-						} else if (line[i] == ',') {
-							mystate = 60;
-						} else if (line[i] == ')') {
-							mystate = 33;
-						} else if (line[i] == '#') {
-							comment_state = 49;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					case 50:
-						readsym = line[i];
-						mystate = 56;
-						break;
-					case 51:
-						writesym = line[i];
-						mystate = 57;
-						break;
-					case 55:
-						writesym = line[i];
-						mystate = 58;
-						break;
-					case 56:
-						if (line[i] == '\'') mystate = 34;
-						else mystate = 8;
-						break;
-					case 57:
-						if (line[i] == '\'') mystate = 32;
-						else mystate = 8;
-						break;
-					case 58:
-						if (line[i] == '\'') mystate = 36;
-						else mystate = 8;
-						break;
-					case 60:
-						if (isspace(line[i])) {
-							mystate = 61;
-						} else if (line[i] == '>') {
-							mystate = 31;
-						} else if (line[i] == '#') {
-							comment_state = 61;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// space case for state 60
-					case 61:
-						if (isspace(line[i])) {
-							mystate = 61;
-						} else if (line[i] == '>') {
-							mystate = 31;
-						} else if (line[i] == '#') {
-							comment_state = 61;
-							mystate = 7;
-						} else mystate = 8;
-						break;
-					// COMMANDS
-					case 100:
-						if (line[i] == '(') {
-							brackets = 1;
-							j = i+1;
-							k = 0;
-							mystate = 101;
-						} else mystate = 8;
-						break;
-					case 101:
-						k++;
-						if (line[i] == '(') brackets++;
-						else if (line[i] == ')') {
-							brackets--;
-							if (brackets == 0) {
-								struct State *cmdstate = State_get(automaton, name);
-								if (cmdstate->cmd != NULL) {
-									cmdstate->cmd = realloc(cmdstate->cmd, sizeof(char) * (strlen(cmdstate->cmd) + k));
-									strncat(cmdstate->cmd, line+j, k-1);
-								} else {
-									cmdstate->cmd = malloc(sizeof(char) * k);
-									cmdstate->cmd[0] = '\0';
-									strncat(cmdstate->cmd, line+j, k-1);
-								}
-								mystate = 102;
-								//for (int m = 0; cmdstate->cmd[m] != '\0'; m++) {
-								//	putchar(cmdstate->cmd[m]);
-								//}
-								//putchar('\n');
-								//printf("cmd: %s\n", cmdstate->cmd);
-							} else { 
-								//k++;
-								mystate = 101;
-							}
-						} else if (line[i] == '\n') {
-							struct State *cmdstate = State_get(automaton, name);
-							if (cmdstate->cmd != NULL) {
-								cmdstate->cmd = realloc(cmdstate->cmd, sizeof(char) * (strlen(cmdstate->cmd)+k+1));
-								strncat(cmdstate->cmd, line+j, k);
-							} else {
-								cmdstate->cmd = malloc(sizeof(char) * (k+1));
-								cmdstate->cmd[0] = '\0';
-								strncat(cmdstate->cmd, line+j, k);
-							}
-							j = i; j=0;
-							k = 0;
-							mystate = 101;
-						} else {
-							//k++;
-							mystate = 101;
-						}
-						break;
-					case 102:
-						if (line[i] == ';') {
-							//mystate = 3;
-							mystate = 103;
-						} else if (isspace(line[i])) {
-							//k = 0;
-							mystate = 102;
-						} else mystate = 8;
-						break;
-					case 103:
-						int n = 0;
-						k = 0;
-						struct State *cmdstate = State_get(automaton, name);
-						char *cmd = cmdstate->cmd;
-						int brackets = 0;
-						int arg_index = 0;
-						
-						int mycmdstate = 1;
-						for (n = 0; cmd[n] != '\0'; n++) {
-							//printf("\tmycmdstate: %d, cmd[%d]: %c\n", mycmdstate, n, cmd[n]);
-							
-							switch(mycmdstate) {
-								case 1:
-									//brackets = 0;
-									if (isspace(cmd[n])) {
-										mycmdstate = 1;
-									} else if (cmd[n] == '"') {
-										j = n + 1;
-										k = 0;
-										mycmdstate = 14;
-									} else if (cmd[n] == '\'') {
-										j = n + 1;
-										k = 0;
-										mycmdstate = 13;
-									} else if (cmd[n] == '{') {
-										brackets++;
-										j = n + 1;
-										k = 0;
-										mycmdstate = 12;
-									} else {
-										j = n;
-										k = 1;
-										mycmdstate = 11;
-									}
-									break;
-								// String begin: basic char
-								case 11:
-									if (isspace(cmd[n])) {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										arg_index++;
-										mycmdstate = 1;
-									} else if (cmd[n] == '{') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										j = n + 1;
-										k = 0;
-										brackets++;
-										mycmdstate = 22;
-									} else if (cmd[n] == '\'') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										j = n + 1;
-										k = 0;
-										mycmdstate = 23;
-									} else if (cmd[n] == '"') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										j = n + 1;
-										k = 0;
-										mycmdstate = 24;
-									} else {
-										k++;
-										mycmdstate = 11;
-									}
-									break;
-								// String begin: '}'
-								case 12:
-									if (cmd[n] == '{') brackets++;
-									
-									if (cmd[n] == '}' && --brackets == 0) {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 12;
-									}
-									break;
-								// String begin: '\''
-								case 13:
-									if (cmd[n] == '\'') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 13;
-									}
-									break;
-								// String begin: '"'
-								case 14:
-									if (cmd[n] == '\"') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 14;
-									}
-									break;
-								// String middle: basic char
-								case 21:
-									if (isspace(cmd[n])) {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										arg_index++;
-										mycmdstate = 1;
-									} else if (cmd[n] == '{') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);	
-										j = n + 1;
-										k = 0;
-										brackets++;
-										mycmdstate = 22;
-									} else if (cmd[n] == '\'') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										j = n + 1;
-										k = 0;
-										mycmdstate = 23;
-									} else if (cmd[n] == '"') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										j = n + 1;
-										k = 0;
-										mycmdstate = 24;
-									} else {
-										k++;
-										mycmdstate = 21;
-									}
-									break;
-								// String middle: '}'
-								case 22:
-									if (cmd[n] == '{') brackets++;
-									
-									if (cmd[n] == '}' && --brackets == 0) {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 22;
-									}
-									break;
-								// String middle: '\''
-								case 23:
-									if (cmd[n] == '\'') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 23;
-									}
-									break;
-								// String middle: '"'
-								case 24:
-									if (cmd[n] == '"') {
-										State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-										mycmdstate = 30;
-									} else {
-										k++;
-										mycmdstate = 24;
-									}
-									break;	
-								// String end
-								case 30:
-									if (isspace(cmd[n])) {
-										arg_index++;
-										mycmdstate = 1;
-									} else if (cmd[n] == '{') {										
-										j = n + 1;
-										k = 0;
-										brackets++;
-										mycmdstate = 22;
-									} else if (cmd[n] == '\'') {
-										j = n + 1;
-										k = 0;
-										mycmdstate = 23;
-									} else if (cmd[n] == '"') {
-										j = n + 1;
-										k = 0;
-										mycmdstate = 24;
-									} else {
-										j = n;
-										k = 1;
-										mycmdstate = 21;
-									}
-									break;
-							}	
-							//printf("\t brackets: %d\n", brackets);		
-						}
-						//printf("\tmycmdstate: %d, cmd[%d]: %c\n", mycmdstate, n, cmd[n]);
-						
-						if (mycmdstate == 11 ) {
-							State_cmd_arg_add(cmdstate, arg_index, j, k, 1);
-							arg_index++;
-						} else if (mycmdstate == 21) {
-							State_cmd_arg_add(cmdstate, arg_index, j, k, 0);
-							arg_index++;
-						} else if (mycmdstate == 30 || mycmdstate == 22 || mycmdstate == 23 || mycmdstate == 24 ) {
-							cmdstate->cmd_args = realloc(cmdstate->cmd_args, sizeof(char *) * (arg_index+2));
-							if (cmdstate->cmd_args == NULL) {
-								fprintf(stderr, "Error allocating new pointer to command args\n");
-								exit(EXIT_FAILURE);
-							}
-							arg_index++;
-						} 
-						
-						cmdstate->cmd_args[arg_index] = (char *)NULL;
-						mystate = 3;
-						
-						// test
-						/*
-						for (int n = 0; cmdstate->cmd_args[n] != NULL; n++) 
-							printf("\t\t%s argv[%d]: '%s'\n", cmdstate->name, n, cmdstate->cmd_args[n]);
-						break;
-						*/
-				}
-				linechar++;
-			}
-	linenum++;
-	}
-	
-	Stack_destroy(symstack);
-	fclose(fp);
-	
-	if (mystate != 3 && mystate !=13) {
-		char highlight=line[linechar-2];
-		if (highlight == '\n') highlight = ' ';
-		fprintf(stderr,"Error on line %d, char [%d]:\n%.*s[%c]%s", 
-		linenum, linechar -1, linechar-2, line, highlight, line+linechar-1);
-		if (line[linechar-2] == '\n') putchar('\n');
-		
-		free(line);
-		Automaton_destroy(automaton);
-		exit(EXIT_FAILURE);
-	}
-			
-	free(line);
-
-	if (automaton->start == NULL || !final_exists) {
-		if (automaton->start == NULL) {
-			fprintf(stderr, "Please define a start state\n");
-		}
-		if (!final_exists) {
-			fprintf(stderr, "Please define at least one final state\n");
-		}
-		Automaton_destroy(automaton);
-		exit(EXIT_FAILURE);
-	}
-	
-	// Sort states in alpha order
-	qsort(automaton->states, automaton->len, sizeof(struct State *), State_compare);
-	
-	return automaton;
+	s0->start = 1;
+	if (a0->start != NULL) a0->start = 0;
+	a0->start = s0;
 }
 
-int isDFA(struct Automaton *automaton)
+// sets final state flag, adds to list of final states
+void set_final(struct Automaton *a0, struct State *s0)
 {
-	// Filter out pdas
-	int npops = 0;
-	int nwrites = 0;
-	for (int i = 0; i < automaton->len; i++) {
-		struct State *state = automaton->states[i];
-		for (int j = 0; j < state->num_trans; j++) {
-			if (state->trans[j]->direction != '\0')
-				return 3; // any pops specified in the file will be ignored
-						  // once a direction is indicated it'll be a TM
-			if (state->trans[j]->readsym != '\0')
-				npops++;
-			if (state->trans[j]->writesym != '\0')
-				nwrites++;
-		}
-	}
-	if (npops) return 2;                 // any pops (w/ no directions) is a PDA
-	else if(!npops && nwrites) return 3; // all writes (w/ no directions) will be considered a TM
-	
-	char alphabet[256];
-	*alphabet = '\0';
-	for (int i = 0; i < automaton->len; i++) {
-		struct State *state = automaton->states[i];
-		for (int j = 0; j < state->num_trans; j++) {
-			if (state->trans[j]->symbol == '\0') return 0;
-			if (strchr(alphabet, state->trans[j]->symbol) == NULL)
-				strncat(alphabet, &state->trans[j]->symbol, 1);
-
-		}
-	}
-
-	for (int i = 0; i < automaton->len; i++) {
-		struct State *state = automaton->states[i];
-		if (strlen(alphabet) == state->num_trans) {
-			for (int j = 0; alphabet[j] != '\0'; j++) {
-				int num_chars = 0;
-				for (int k = 0; k < state->num_trans; k++) {
-					
-					if (state->trans[k]->symbol == alphabet[j])
-						num_chars += 1;
-					if (num_chars > 1) return 0;
-					
-				}
-				if (num_chars == 0) return 0;
-			}
-		} else return 0;
-	}
-	return 1;
-
+	s0->final = 1;
+	Stack_push(&a0->finals, &s0);
 }
 
-int DFA_run(struct Automaton *automaton, char *input)
+// sets reject state flag, adds to list of reject states
+void set_reject(struct Automaton *a0, struct State *s0)
 {
-	//if (flag_verbose) Automaton_print(automaton);
-
-	struct State *state = automaton->start;
-	for (int i = 0; input[i] != '\0'; i++) {
-		if (flag_verbose) printf("[%c]%s:\n", input[i], input+i+1);
-		int none = 1;
-		for (int j = 0; j < state->num_trans; j++) {
-			if (input[i] == state->trans[j]->symbol) {
-				none = 0;
-				if (flag_verbose) {
-					printf("\t%s > %s", state->name, state->trans[j]->state->name);
-					if (state->trans[j]->state->final) printf(" [F]\n"); else printf("\n");
-				}
-				state = state->trans[j]->state;
-				if (execute && state->cmd != NULL) State_cmd_run(state);
-				break;
-			}
-		}
-		
-		if (delay) nsleep(delay);
-		
-		if (none) {
-			printf("=>%s\n\tREJECTED\n", input);
-			return 0;
-		}
-	}
-	if (state->final) {
-		printf("=>%s\n\tACCEPTED\n", input);
-		return 1;
-	} else {
-		printf("=>%s\n\tREJECTED\n", input);
-		return 0;
-	}
-}
-
-int Machine_advance(struct MultiStackList *source, struct MultiStackList *target, 
-	struct Automaton *automaton, struct State *state, struct Transition *trans)
-{
-	// STACK OPERATIONS
-	char readsym = trans->readsym;
-	char writesym = trans->writesym;
-	struct MultiStack *mstmp = MultiStack_get(source, state);
-	
-	// do not push or pop
-	if (readsym == '\0' && writesym == '\0') {
-		if (mstmp != NULL) {
-			for (int l = 0; l < mstmp->len; l++) {
-				struct Stack *copy = Stack_copy(mstmp->stacks[l]);
-				Stack_add_to(target, trans->state, copy);
-			}
-		}
-		State_add(automaton, trans->state);
-		return 1;
-	// write/push
-	} else if (trans->readsym == '\0' && trans->writesym != '\0') {
-		if (mstmp != NULL) {
-			for (int l = 0; l < mstmp->len; l++) {
-				struct Stack *copy = Stack_copy(mstmp->stacks[l]);
-				Stack_push(copy, trans->writesym);
-				Stack_add_to(target, trans->state, copy);
-			}
-		} else {
-			struct Stack *new_stack = Stack_create();
-			Stack_push(new_stack, trans->writesym);
-			Stack_add_to(target, trans->state, new_stack);
-			
-		}
-		
-		State_add(automaton, trans->state);
-		return 1;
-	// read/pop (and possibly write/push)
-	} else if (trans->readsym != '\0') {
-		if (mstmp != NULL) {
-			int state_added = 0;
-			for (int l = 0; l < mstmp->len; l++) {
-				if (Stack_peek(mstmp->stacks[l]) == trans->readsym) {
-					if (!state_added) {
-						State_add(automaton, trans->state);
-						state_added = 1;
-					}
-					
-					struct Stack *copy = Stack_copy(mstmp->stacks[l]);
-					Stack_pop(copy);
-					if (trans->writesym != '\0') Stack_push(copy, trans->writesym);
-					Stack_add_to(target, trans->state, copy);
-					
-				}
-			}
-			return state_added;
-		}
-	}
-}
-
-int Automaton_run(struct Automaton *automaton, char *input)
-{
-	struct Automaton *current_states = Automaton_create();
-	struct MultiStackList *current_stacks = MultiStackList_create();
-	struct Automaton *next_states;
-	struct MultiStackList *next_stacks;
-	
-	//if (flag_verbose) putchar('\n');
-	
-	// Add empty string transitions to current array
-	State_add(current_states, automaton->start);
-	int printed_string = 0;
-	if (input[0] == '\0') {
-		for (int i = 0; i < current_states->len; i++) {
-			struct State *state = current_states->states[i];
-			for (int j = 0; j < state->num_trans; j++) {
-				struct Transition *trans = state->trans[j];
-				if (state->trans[j]->symbol == '\0') {
-					int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
-					if (added && flag_verbose) {
-						if (!printed_string) {
-							printf("[]%s:\n", input);
-							printed_string = 1;
-						}
-						printf("\t%s > %s", state->name, trans->state->name);
-						if (trans->state->final) printf(" [F]"); //else printf("\n");
-						struct MultiStack *mstmp = MultiStack_get(current_stacks, trans->state);
-						if (mstmp) {
-							for (int k = 0; k < mstmp->len; k++)
-								printf(" %s", mstmp->stacks[k]->stack);
-						}
-						printf("\n");
-					}
-				}
-			}
-		}
-	}
-	
-	// Iterate through each input char
-	for (int i = 0; input[i] != '\0'; i++) {
-		
-		next_states = Automaton_create();
-		next_stacks = MultiStackList_create();
-		
-		if (flag_verbose) printf("[%c]%s:\n", input[i], input+i+1);
-		
-		for (int j = 0; j < current_states->len; j++) {
-			struct State *state = current_states->states[j];
-			for (int k = 0; k < state->num_trans; k++) {
-				struct Transition *trans = state->trans[k];
-				
-				if (trans->symbol == '\0') {
-					int added = Machine_advance(current_stacks, current_stacks, current_states, state, trans);
-				}
-				
-				// Input char match 
-				if (trans->symbol == input[i]) {
-					int added = Machine_advance(current_stacks, next_stacks, next_states, state, trans);
-					if (added && flag_verbose) {
-						printf("\t%s > %s", state->name, trans->state->name);
-						if (trans->state->final) printf(" [F]"); 
-						struct MultiStack *mstmp = MultiStack_get(next_stacks, trans->state);
-						if (mstmp) {
-							for (int k = 0; k < mstmp->len; k++)
-								printf(" %s", mstmp->stacks[k]->stack);
-						}
-						printf("\n");
-					}
-				}
-			}
-		}
-		
-		// Prep next array with empty string transitions
-		for (int j = 0; j < next_states->len; j++) {
-			struct State *state = next_states->states[j];
-			for (int k = 0; k < state->num_trans; k++) {
-				struct Transition *trans = state->trans[k];
-				if (trans->symbol == '\0') {
-					int added = Machine_advance(next_stacks, next_stacks, next_states, state, trans);
-					if (added & flag_verbose) {
-						printf("\t%s > %s", state->name, state->trans[k]->state->name);
-						if (state->trans[k]->state->final) printf(" [F]");
-						struct MultiStack *mstmp = MultiStack_get(next_stacks, trans->state);
-						if (mstmp) {
-							for (int k = 0; k < mstmp->len; k++)
-								printf(" %s", mstmp->stacks[k]->stack);
-						}
-						printf("\n");
-					}
-				}
-			}
-		}
-		
-		for (int j = 0; j < next_states->len; j++) {
-			if (execute && next_states->states[j]->cmd != NULL) 
-				State_cmd_run(next_states->states[j]);
-		}
-		
-		if (delay) nsleep(delay);
-		
-		Automaton_clear(current_states);
-		MultiStackList_destroy(current_stacks);
-		current_states = next_states;
-		current_stacks = next_stacks;
-		
-		if (current_states->len == 0) {
-			printf("=>%s\n\tREJECTED\n", input);
-			MultiStackList_destroy(current_stacks);
-			Automaton_clear(current_states);
-			return 1;
-		}
-	}
-	
-	for (int i = 0; i < current_states->len; i++) {
-		if (current_states->states[i]->final) { 
-			printf("=>%s\n\tACCEPTED\n", input);
-			MultiStackList_destroy(current_stacks);
-			Automaton_clear(current_states);
-			return 0;
-		}
-	}
-	Automaton_clear(current_states);
-	MultiStackList_destroy(current_stacks);
-	printf("=>%s\n\tREJECTED\n", input);
-	return 1;
-
-}
-
-int TuringMachine_run(struct Automaton *automaton, char *input)
-{
-	struct Automaton *current_states = Automaton_create();
-	struct MultiStackList *current_stacks = MultiStackList_create();
-	struct Automaton *next_states;
-	struct MultiStackList *next_stacks;
-	
-	State_add(current_states, automaton->start);
-	struct Stack *start_stack = Stack_create();
-	for (int i = 0; input[i] != '\0'; i++) {
-		Stack_push(start_stack, input[i]);
-	}
-	struct MultiStack *start_ms = MultiStack_create(automaton->start);
-	Stack_add(start_ms, start_stack);
-	MultiStack_add(current_stacks, start_ms);
-	
-	while(1) {
-		if (flag_verbose) printf("---------------\n");
-		
-		next_states = Automaton_create();
-		next_stacks = MultiStackList_create();
-		
-		for (int i = 0; i < current_states->len; i++) {
-			struct State *state = current_states->states[i];
-			for (int j = 0; j < state->num_trans; j++) {
-				struct Transition *trans = state->trans[j];
-				struct MultiStack *mstmp = MultiStack_get(current_stacks, state);
-				
-				int state_added = 0;
-				if (trans->symbol == '\0') {
-					State_add(next_states, trans->state);
-					if (mstmp != NULL) {
-						for (int k = 0; k < mstmp->len; k++) {
-							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
-							if (trans->writesym != '\0')
-								copy->stack[copy->pos] = trans->writesym;
-							int branch_reject = Stack_change_pos(copy, trans->direction);
-							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
-						}
-					}
-				} else if (mstmp != NULL) {
-					for (int k = 0; k < mstmp->len; k++) {
-						struct Stack *stacktmp = mstmp->stacks[k];
-						if (trans->symbol == stacktmp->stack[stacktmp->pos]) {
-							if (!state_added) {
-								State_add(next_states, trans->state);
-								state_added = 1;
-							}
-							struct Stack *copy = Stack_copy(stacktmp);
-							if (trans->writesym != '\0')
-								copy->stack[copy->pos] = trans->writesym;
-							int branch_reject = Stack_change_pos(copy, trans->direction);
-							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
-						}
-					}
-				}
-				if (state_added && flag_verbose) {
-					printf("\t%s > %s", state->name, trans->state->name);
-					if (trans->state->final) { printf(" [F]"); }
-					if (trans->state->reject) { printf(" [R]"); }
-					struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
-					if (printmp) {
-						for (int k = 0; k < printmp->len; k++) {
-							//printf(" %s", mstmp->stacks[k]->stack);
-							putchar(' ');
-							Stack_print(printmp->stacks[k]);
-						}
-					}
-					printf("\n");
-				}
-				
-			}
-		}
-		
-		for (int i = 0; i < next_states->len; i++) {
-			struct State *state = next_states->states[i];
-			for (int j = 0; j < state->num_trans; j++) {
-				struct Transition *trans = state->trans[j];
-				if (trans->symbol == '\0') {
-					struct MultiStack *mstmp = MultiStack_get(next_stacks, state);
-					int added = State_add(next_states, trans->state);
-					if (added && mstmp != NULL) {
-						for (int k = 0; k < mstmp->len; k++) {
-							struct Stack *copy = Stack_copy(mstmp->stacks[k]);
-							if (trans->writesym != '\0')
-								copy->stack[copy->pos] = trans->writesym;
-							int branch_reject = Stack_change_pos(copy, trans->direction);
-							if (!branch_reject) Stack_add_to(next_stacks, trans->state, copy);
-						}
-					}
-					
-					if (flag_verbose) {
-						printf("\t%s > %s", state->name, trans->state->name);
-						if (trans->state->final) { printf(" [F]"); }
-						if (trans->state->reject) { printf(" [R]"); }
-						struct MultiStack *printmp = MultiStack_get(next_stacks, trans->state);
-						if (printmp) {
-							for (int k = 0; k < printmp->len; k++) {
-								putchar(' ');
-								Stack_print(printmp->stacks[k]);
-							}
-						}
-						printf("\n");
-					}
-				}
-			}
-		}
-		
-		for (int i = 0; i < next_states->len; i++) {
-			if (execute && next_states->states[i]->cmd != NULL) 
-				//printf("%s: running %s\n", next_states->states[i]->name, next_states->states[i]->cmd_args[0]);
-				State_cmd_run(next_states->states[i]);
-				//system(next_states->states[i]->cmd);
-		}
-		
-		if (delay) nsleep(delay);
-		
-		Automaton_clear(current_states);
-		MultiStackList_destroy(current_stacks);
-		current_states = next_states;
-		current_stacks = next_stacks;
-		
-		// If no future states available, TM rejects
-		if (current_states->len == 0) {
-			printf("=>%s\n\tREJECTED\n", input);
-			MultiStackList_destroy(current_stacks);
-			Automaton_clear(current_states);
-			return 1;
-		}
-		
-		// Only one nondeterministic branch need accept for NTM to accept
-		int reject_count = 0;
-		for (int i = 0; i < current_states->len; i++) {
-			if (current_states->states[i]->final) {
-				printf("=>%s\n\tACCEPTED\n", input);
-				MultiStackList_destroy(current_stacks);
-				Automaton_clear(current_states);
-				return 0;
-			} else if (current_states->states[i]->reject) {
-				reject_count++;
-			}
-		}
-		// All nondeterministic branches must reject for NTM to reject
-		if (reject_count == current_states->len) {
-			printf("=>%s\n\tREJECTED\n", input);
-			MultiStackList_destroy(current_stacks);
-			Automaton_clear(current_states);
-			return 1;
-		}
-	}
-}
-
-void Automaton_run_file(struct Automaton *automaton, char *input_string_file)
-{
-	FILE *input_string_fp;
-	char *input_string = NULL;
-	size_t len = 0;
-	ssize_t read;
-
-	input_string_fp = fopen(input_string_file, "r");
-	if (input_string_fp == NULL) {
-		fprintf(stderr, "Error opening %s\n", input_string_file);
-		exit(EXIT_FAILURE);
-	}
-	
-	int machine_code = isDFA(automaton);
-	while ((read = getline(&input_string, &len, input_string_fp)) != -1)
-	{
-		input_string[strcspn(input_string, "\r\n")] = 0;
-		if (machine_code == 1)
-			DFA_run(automaton, input_string);
-		else if (machine_code != 3)
-			Automaton_run(automaton, input_string);
-		else {
-			TuringMachine_run(automaton, input_string);
-		}
-	}
+	s0->reject = 1;
+	Stack_push(&a0->rejects, &s0);
 }

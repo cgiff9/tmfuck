@@ -1,0 +1,26 @@
+start : q1;
+final: q4;
+NEWVAR = j,k,l,i,m,n;
+NEWVAR = j,k,l,i,'b', '@' , i ,  m , n;
+
+#VAR = a,b,c,a,d,a,a,b,a,
+#a,a,b,a,a,a,a,a,a,a,a,a,a,a,a,
+#a,a,a,'a',a;
+
+SOMEOTHERVAR = a,c,d,';';
+BOOGER = f,u,'k' \ $SOMEOTHERVAR,u,f;
+q0:
+	>q2 (>'$');       # push initial stack symbol
+q2: 
+	1,a,$NAME,1,4,3>q2(>0),q3(>1,R),q2(L),g0(>1,R),a(L);	# push 0 or nondeterministically "eat" the middle 0 
+	1>q2(>1),q3(>2,L);	# push 1 or nondeterministically "eat" the middle 1
+	>q3;			
+q3:
+	0>q3(0>);      # pop 0
+	0,1,2>q0,
+		   q1(L);
+	1>q3(1>);      # pop 1
+	>q4('$'>);       # pop initial stack symbol
+
+#q4: >q6,q7; 1,2>q3; >q3,q4,q5,q3,q3; >q6; >q15;
+#q15: a,b,c,d > q10;

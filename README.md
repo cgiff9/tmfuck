@@ -1,242 +1,268 @@
+
 # tmfuck
 
-A simple interpreted language for building Turing machines and other automata
-- [x] Determinstic finite automata (DFA)
-- [x] Nondeterministic finite automata (NFA)
-- [x] Pushdown automata (PDA)
-- [x] Deterministic pushdown automata (DPDA)
-- [x] Turing machines
-- [x] Nondeterministic Turing machines
-- [x] State-driven command execution
+A simple free-form interpreted language for building Turing machines and other automata. Deterministic and nondeterministic variants of the following machine types are supported:
+- [x] Finite automata (DFA, NFA)
+- [x] Pushdown automata (PDA, DPDA)
+- [x] Turing machines (TM, NTM)
+- [ ] Multitape Turing machines (coming soon)
 
-While the name of this language is inspired by the venerable migrane-inducing 
-[brainfuck](https://esolangs.org/wiki/Brainfuck), it is the main goal of this project to 
-make the textual design of Turing machines and other automata more comprehensible.
-<br />
-<br />
-That being said, there is an element of brainfuckery that is unavoidable when exploring these
-topics. You have been warned!
+The name of this language is inspired by the venerable language [brainfuck](https://esolangs.org/wiki/Brainfuck).
 
-## Example Program
-This [example](../main/samples/tm_0lenPow2.txt) Turing machine will accept a string of 0s
-with a length that is a power of 2.
-```
-start: q1;
-final: q7;
-reject: q6;
-q1:
-	_>q6 (R);
-	x>q6 (R);
-	0>q2 (>_, R);
-q2:
-	x>q2 (R);
-	0>q3 (>x,R);
-	_>q7 (R);
-q3:
-	x>q3 (R);
-	0>q4 (R);
-	_>q5 (L);
-q4:
-	x>q4 (R);
-	0>q3 (>x,R);
-	_>q6 (R);
-q5:
-	0>q5 (L);
-	x>q5 (L);
-	_>q2 (R);
-q6:
-q7:
-```
+**Language Features:**
++ Free-form (arrange code to your visual liking)
++ Define your alphabet on-the-fly (no need to specify it beforehand)
++ Define and manipulate [lists](#symbol-lists) of transition symbols using [variables](#symbol-variables)
++ ASCII and [integer](#integer-symbols) cell symbols
++ Code [comments](#comments)
 
-## Building
+### Example Machine
+This [example](../main/samples/busy-beaver/tm_bb4_107.tmf) Turing machine will execute the 4th Busy Beaver function:
 ```
+start: q0;
+final: qh;
+blank: 0;     #default blank is _ (underscore)
+
+q0: 0 > q1(1,R); 1 > q1(1,L);
+q1: 0 > q0(1,L); 1 > q2(0,L);
+q2: 0 > qh(1,R); 1 > q3(1,L);
+q3: 0 > q3(1,R); 1 > q0(0,R);
+```
+Feel free to explore the samples folder to gain a quick intuition of the syntax and features of tmf, which is explained in more detail below. You can also read [spec.tmf](../main/samples/spec.tmf), which specifies a DFA (finite state machine) written in tmf that accepts a valid tmf file.
+
+## Building from source
+
+### Dependencies
+This program makes use of the [xxHash library](https://github.com/Cyan4973/xxHash), which is widely available via the package managers of various operating systems.
+
+### Building
+```
+git clone https://github.com/cgiff9/tmfuck
+cd tmfuck
+make tmf
+```
+If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can help you set the include statements across the tmf source and download the needed files for xxHash:
+```
+./xxhash_conf.sh local
+./xxhash_conf.sh download
+make localtmf
+```
+Then you'll have a tmf binary compiled with the downloaded xxhash header and source file. If you wish to recompile using your system's installed xxHash library, you can reset the #include statements and compile normally:
+```
+./xxhash_conf.sh system
 make tmf
 ```
 
 ## Usage
 ```
 $ ./tmf <machine file> <input string>
-$ ./tmf samples/dfa_divBy8.txt 1000
-=>1000
-	ACCEPTED
 ```
-A DFA, NFA, PDA, or TM file can be supplied via the first
-"non-option" argument. The input string is
-supplied via the second "non-option" argument.
+Input string/tape via the command line:
+```
+$ ./tmf samples/dfa_divBy8.tmf 1000
+```
+Input string/tape via file:
+```
+$ ./tmf samples/dfa_divBy8.tmf -i mystring.txt
+```
+The entire contents of the input file are considered one string/tape, including spaces, newlines and other whitespace. See the [Delimiter](#input-stringtape-delimiters) section below on how to ignore any unintended characters, including whitespace.
 
-## Arguments
+### Parameters
 ```
--v                verbose
--f <file>         input string file
--d                convert NFA to DFA
--m                minimize DFA
--r <string>       regex string
--s <seconds>      sleep between verbose output steps
--x                enable command execution
--c                print config only
+-v                verbose newline mode
+-p                verbose inline (in-place) mode
+-i <file>         input string/tape file
+-d <char>         input string/tape ASCII delimiter
+-s <seconds>      sleep between verbose output steps (decimals allowed)
+-c                print machine file to console
+-cc               print machine file to console (neat)
+-w <width>        maximum number of printed tape/stack characters
+-n                force use of the nondeterministic engine
+-r <regex>        regex string
+-z                print debug information
 ```
-The verbose flag will show state transition
-information. The file supplied to the `-f` 
-argument may contain multiple strings with 
-one per line.
+## Syntax Highlighting
+For ViM users, you can download a [vim syntax file](../main/extra/vim/tmf.vim) to provide some basic syntax highlighting when crafting *.tmf machines.
 
-## File Format
-
-### General Syntax
-State names are defined by strings which contain no spaces 
-followed by a colon `:`. Following the colon, on the same line
-or any number of new lines, may be a list of transitions defined 
-for that state. Each transition definition must be followed by a 
-semicolon `;`.
-<br />
-<br />
-States which do not require any transitions can still be 
-referenced by the transition definitions of other states. 
-This can be helpful for certain `final:` or `reject:`
-states that simply act to terminate the program and require no
-more input/tape processing. That being said, it is still perfectly 
-valid to define a state that contains zero transitions (ie. `q5: `).
-<br />
-<br />
-The file format is quite forgiving of whitespace and empty lines, 
-but understand that state names themselves may not contain any 
-whitespace. Special characters that would otherwise be considered 
-operators by the program may be defined within single quotes `' '`)
-for use in transitions. Code comments can be added in a manner similar
-to many shells by using the special character `#`.
-
-### Transitions
+## Defining states and transitions
+To define the transitions for a state, first type the state's name followed by a colon:
 ```
-start: q0;
-final: q0, q1;
-q0: 0>q0; 1>q1;
-q1: 0>q2; 1>q1;
-q2: 0>q3; 1>q1;
-q3: 0>q0; 1>q1;
-```
-To specify a state's transitions, first type out
-the state's name followed by a colon. Next type a
-character that will trigger a transition, followed
-by a `>`, then followed by a destination state name. 
-Transition characters may be specified within single 
-quotes, ie.:
-
-```
-q0: ';'>q0; 'a'>q1;
-q1: a> q0; b >q3;
-```
-Multiple transition characters may be defined as a
-comma-separated list:
-```
-q0: 0, 1, 2, ';', a >q0;
-q1: a,b,c > q2;
-```
-Following the `>` character can be a comma-separated
-list of state names:
-```
-q0: 'a' >q0,q1;
-q1: 'a','b','c' > q1, q2; 
-```
-For nondeterministic automata, an empty string (Epsilon) transition
-can be supplied by typing `>` with no preceding characters:
-```
-q1: >q0,q2; a>q0;
-q2: 
-    a > q0;
-    > q1, q2;
-```
-
-#### Pushdown Automata
-Additional transition information can be supplied to design
-pushdown automata, or PDAs. Here's an example that recognizes a 
-number of `0`s followed by the same number of `1`s:
-```
-start: q1;
-final: q1, q4;
-q1: 
-    >q2 (>'$');    # go to q2 and push initial stack symbol '$'
-q2: 
-    0>q2  (>0);    # upon input '0', go to q2 and push '0' to stack
-    1>q3  (0>);    # upon input '1', go to q3 and pop '0' from stack
-q3: 
-    1>q3  (0>);    # upon input '1', stay in q3 and pop '0' from stack
-    >q4 ('$'>);    # go to q4 and pop '$' from stack
-q4:
-```
-Look, now you can actually [parse HTML](https://stackoverflow.com/a/1732454)!
-<br />
-<br />
-In parentheses following the destination state of
-the transition, stack operations can be defined.
-```
-( > x )        push 'x'
-( x > )        pop 'x'
-( x > y )      pop 'x' and push 'y'
-```
-These stack characters can also be specified within
-single quotes.
-
-#### Turing machines
-Specifying transitions for Turing machines, or TMs, is done
-in a similar way to PDAs. Rather than a separate stack, TMs employ 
-an "input tape" whose head can change direction. After defining 
-a destination state in the transition, a TM may either write a 
-character to the tape, change direction, both, or neither.
-<br />
-<br />
-Keep in mind that, whether intended or not, a TM can run forever 
-if it has been designed to do so (`CTRL+C` may be your friend). Here
-is an example TM that takes a binary string and increments it by one:
-```
-start: q0;
-final: q2;
-blank: @;
 q0:
-    0>q0 (R);
-    1>q0 (R);
-    @>q1 (L);
-q1:
-    1>q1 (>0,L);
-    0>q2 (>1,L);
-    @>q2 (>1,L);
-q2:
 ```
-The default blank symbol is the underscore `_`, but this can
-be overridden by using the `blank:` directive. This blank character can 
-be specified within single quotes.
-<br />
-<br />
-By default, both the left and right ends of the tape are considered 
-to be filled with "infinite" blanks. This behavior can be changed with the 
-`bound:` directive; `L` indicates the tape is bounded at the left end, and `R`
-indicates the tape is bounded at the right end. If the head reaches the bounded 
-end of the tape and tries to move further in the same direction, it will simply
-stay in place (and still apply any write operation specified). However, this behavior
-can also be overridden by listing `H` (for halt) before or after `R` or `L`. 
-To clarify via some examples:
+Next, type an input symbol, followed by a '>', then followed by some other destination state:
 ```
-bound: L;
+q0: A > q1
 ```
-I'll call this Sipser style: the tape only extends infinitely to the right, and if the head
-tries to move left of the beginning, it stays in place (and still applies a write operation if
-given).
+On input symbol 'A', the machine goes from state q0 to q1. Type a semicolon to indicate the end of this transition definition. All statements in tmf are terminated with with a semicolon (except state definitions which contain no transitions).
 ```
-bound: L, H;
+q0: A > q1;
 ```
-In this example, the tape also extends infinitely to the right only, but if the tape head tries to
-move left of the tape's beginning, the TM halts and rejects (for that branch). This 
-behavior is less common, but I read about it being used somewhere and thought it should be available.
-Bounding the right end of the tape with `R` (and extending infinitely to the left) is also 
-a rather unusual option, but who am I to judge? :)
-<br />
-<br />
-Further acknowledging the varying formal definitions out there, 
-please note the `reject:` directive is also optional for Turing machines, although they are commonly
-employed in the wild. In this program multiple reject states can be listed. I'm not sure why you'd ever 
-need more than one reject state, but again, who am I to judge? ;)
 
-### Directives
-There are five directives that govern important aspects
+### Pushdown Automata
+If you're designing a pushdown automaton, you can specify a pop, push, or pop/push combination in parentheses following the destination state:
+```
+q0: A > q1 (>B);
+```
+In the above case, the machine pushes a 'B' to the stack before going to state q1.
+```
+q0: A > q1 (B>);
+```
+In the above case, the top of the stack must be a 'B' in order for the machine to pop from the stack and proceed to state q1. Else, the machine (or branch) rejects.
+```
+q0: A > q1 (B>A);
+```
+The above case is the same as the previous one, but it will push an 'A' to the stack if it is able to pop a 'B' from the stack first.
+
+### Turing Machines
+Direction and write symbols may also be specified in parentheses following the destination state. Starting from the basic initial example, let's make the input tape's head go left after reading input symbol 'A':
+```
+q0: A > q1 (L);
+```
+If we wish to write a symbol '7' to the tape before moving left:
+```
+q0: A > q1 (7, L);
+```
+Nothing is stopping you from using stack operations with Turing machine
+instructions, either:
+```
+q0: A > q1 (7, L, >B);
+```
+In this case, on input symbol 'A', the machine pushes a 'B' to the stack, writes a 'Z' to the tape, then moves the tape head left. The pop operation imposes the same transition conditions mentioned in the "PDA" section above.
+
+*NOTE: These three operations (tape write, tape direction, and stack pop/push) may be listed in any order between the parentheses, but each operation type may appear at most once.*
+
+#### Tape Properties
+The tape extends "infinitely" in both directions, and the default blank character is the '_' underscore. This character may be changed to any type of symbol, including integers outside the printable ASCII range (see the "Directives" section below).
+
+## More Syntax
+
+### Symbol Quoting
+Any printable ASCII symbol, whether used for the input, stack, or tape-write operations, may be enclosed in single quotes. Quotes *must* be used when using tmf control characters as input symbols:
+```
+q0: ';' > q1;
+```
+#### Control Characters:
+All the characters that must be single-quoted (or have their integer equivalents used instead) are listed below:
+```
+: > $ , ; ( ) ' \ # =
+```
+State and variable names may consist of non-whitespace printable characters not listed above.
+
+### Symbol Lists
+Multiple input symbols may be defined before the '>' character:
+```
+q0: A,B,C,'$',D > q1(L);
+```
+*WARNING: Symbol lists may not contain epsilon transitions.*
+
+### Destination Lists
+Multiple destinations my also be listed following the '>' character:
+```
+q0: A,B,C,D > q1(L), q2(1,R), q3;
+```
+*Note: The set of transitions defined in this statement will force tmf to process the machine with its nondeterministic engine.*
+
+### Symbol Variables
+A variable is simply a name followed by an '=', then followed comma-separated list of input symbols. Variables may be defined to stand in place of several input symbols. Notice the difference between variable declarations and variable references, which are similar in syntax to most shell scripting languages.
+```
+ALPHABET = A, B, C, 1207, ';', D, E ;     # declaration
+FEWER = $ALPHABET \ D, E;                 # declaration, reference
+ELSESYMS = $ALPHABET \ $FEWER             # declaration, two references
+q0: $ALPHABET,Z,Y > q1;                   # reference inside sym list
+q1: $FEWER > q2;                          # reference
+q2: $ELSESYMS > q2;                       # reference
+```
+Here is what the above example looks like without variables:
+```
+q0: A, B, C, 1207, ';', D, E, Z, Y > q1;
+q1: A, B, C, 1207, ';' > q2;
+q2: D, E > q2;
+```
+Note how variables and individual symbols may be listed together in transition statements and variable definitions. Also note the terminating semicolon after the list.
+
+*WARNING: Variables may NOT contain epsilon transitions. Epsilon transitions must always be explicitly defined.*
+
+#### Set-difference operator \\
+When defining or changing a variable, the set-difference operator '\\' may be used to exclude elements on the right of the '\\' from elements on the left. This operator may only be used once per variable definition, and may not be used in transition definitions. Duplicate symbols are ignored, as tmf will never add a duplicate transition.
+
+### Integer Symbols
+Integers may be used as input, pop/push, and tape-write symbols. 
+
+A single ASCII character will always be interpreted as that ASCII character. To specify integers in the range zero through nine, prepend a '0' to the input symbol:
+```
+q0: 01 > q1; 08 > q1; 8 > q1;
+```
+In this example, the integer values one, eight, and fifty-six will go to state q1. Consult an [ASCII table](https://www.asciitable.com/) for more information on the difference between ASCII character values and ASCII decimal values.
+
+Negative integers may also be specified, as long as the datatype 
+specified by the [CELL_TYPE](#cell_type-macro-advanced) macro (in file auto.h) is signed. Else, the C Language's casting rules will determine how the integer is made to fit within the range of CELL_TYPE.
+```
+q0: -119 > q1; -1 > q1; -8 > q1;
+```
+Notice that single-digit negative integers do not require the prepended '0'.
+
+*Note:  ASCII printable characters will always be printed as such in verbose mode, even if they were specified as integers in the input tape/string.*
+
+#### Input String/Tape Delimiters
+Delimiters can be used to ignore extraneous characters in your input string/tape, and they are required to indicate integer symbols as well.
+
+To specify integer values in the input tape/string, at least one of the printable
+ASCII characters must be "sacrificed" as this delimiter to indicate whether a sequence of digits should be interpreted as an integer:
+```
+$ ./tmf blah.tmf -d % abc%1207%def
+$ ./tmf blah.tmf -d % 1207%abcdef
+$ ./tmf blah.tmf -d % abcdef%1207
+```
+In these samples, the sequence "1207" will be interpreted as a single cell with the integer value 1207. The other printable characters are treated normally, with each one being its own individual cell. A special value to the '-d' parameter can also be used to treat any [whitespace](https://en.cppreference.com/w/c/string/byte/isspace) as a delimiter:
+```
+% ./tmf blah.tmf -d ws -i input_string.txt
+```
+The "ws" value ensures that any amount of white space in the file "input_string.txt" will be considered as a separator between individual cells. Let's say input_string.txt looks like this:
+```
+1207
+1852
+32000
+-934 836  a    bcd -9800
+```
+In this case, the input string/tape will contain the individual cells 1207, 1852, 32000, -934, 836, a, b, c, d, and -9800. Notice how the delimiters may appear any number of times between cells, and that the delimiters are optional between printable ASCII characters.
+```
+$./tmf blah.tmf -d % abc%37%def
+```
+Above, the input string is "abc%def". To specify a delimiter character as a literal cell in the input string, its decimal value must be used. In this case, ASCII character '%' has an ASCII decimal value of 37.
+
+*WARNING: Delimiters are only for preprocessing cells in the input string/tape; do not take it into account when designing your machine file. Input string/tape delimiting is off by default.*
+
+#### CELL_TYPE Macro (Advanced)
+The type of each cell used in the stack and input string/tape may be changed BEFORE compilation. The default CELL_TYPE for tmf is the short (signed short int), which has a size of 2 Bytes and a range of -32768 to 32767 on many machines. This macro is defined and explained in further detail in the [auto.h](../main/auto.h) source file.
+
+### Comments
+Single-line (#) and inline (#\* ... \*#) comments are supported, and share a syntax and behavior similar to shell scripting comments and C-style inline comments:
+<pre><code>q0: >q1(R); <b># qa: n > q1;</b>
+q1: A > q2(B,L); 
+<b>#* q2: H > q3;
+q3: i > q4; *#</b></code></pre>
+The commented code portions are shown in bold above. Being a free-form language, comments in tmf may be placed *almost* anywhere, so long as the code excluding them is valid.
+
+## Nondeterminism
+What this program considers to be deterministic and nondeterministic 
+diverges somewhat from the theoretical definitions. For a machine to
+run in tmf's nondeterministic engine, it must contain at least 
+one transition with at least one of the following properties:
+1. It specifies multiple destinations for a single input symbol.
+2. It makes use of one or more epsilon transitions.
+
+A machine with the above properties will be simulated using
+the nondeterministic engine. The '-n' parameter may be used to force a "deterministic" machine to run in the nondeterministic engine, if you'd like to compare their performance.
+
+### Epsilon Transitions
+Epsilon transitions specify a destination that can be reached without consuming/reading an input symbol. They can be defined in tmf by simply omitting any input characters before the '>' character:
+```
+q0: > q1(L);
+```
+Epsilon transitions must always be explicitly invoked, meaning they can not be an element in an input symbol list or a variable.
+
+## Machine File Directives
+There are four directives that govern important aspects
 of the machine file:
 #### Syntax
 ```
@@ -244,128 +270,25 @@ start:   [one state];
 final:   [comma-separated list of states];
 reject:  [comma-separated list of states];
 blank:   [one character];
-bound:   [L | R | H | (empty) ];
 ```
-#### Meaning
-```
-start:   + the state from which a machine begins
-final:   + the state(s) that signal the end of a machine 
-           and acceptance of the input string
-reject:  + the states(s) that signal the immediate end of 
-           a Turing machine and rejection of the input string
-blank:   + the character that "fills" the infinite end(s) of
-           a Turing machine's tape. Default is '_'
-bound:   + indicates which end of a Turing machine's tape is
-           not filled with infinite blanks. Default is
-           empty (no character), meaning both tape ends are
-           infinite.
-```
-For all types of automata, the `start:` and `final:` 
-directives are required. The `reject:`, `blank:`, and
-`bound:` directives apply only to Turing machines and are 
-optional.
-<br />
-<br />
-Understand that these directives are considered special
-state names, so please avoid referring to these names 
-when defining transitions. The `final:` and `reject:` 
-directives can be used on multiple lines and will be 
-aggregated. If the `start:`, `blank:`, and `bound:`
-directives are used on multiple lines, the lowest line 
-(and its last listed element) will be used.
+**start:**   The state from which a machine begins.
+**final:**   The state(s) that signal the end of a machine and acceptance of the input string.
+**reject:**  The states(s) that signal the immediate end of a machine and rejection of the input string.
+**blank:**   The character that "fills" the infinite end(s) of a machine's tape. Default is the underscore '_' character.
 
-## Command Execution
-You didn't think this was just a silly acceptor/rejector, did you? For you *real* nerds out there, consider adding 
-your own custom commands to any defined states. These commands are executed any time a state is
-*transitioned to*, meaning commands for the start state will not run immediately at the beginning.
-<br />
-<br />
-By default, no commands will be executed. To enable command execution, use the `-x` parameter.
+*Note: You can make and run machines without defining any final states; just know the implications of doing so for your machine type.*
 
-### Syntax
-Before or after you've defined transitions (if at all), you can put system commands in-between 
-a `$( ... );` statement. This command should inherit the environment of the shell you ran `./tmf`
-in, but when in doubt you can always use full filepaths.
-```
-q0: 0>q1; $(echo hello);
-```
-
-Like the transition definitions themselves, mind the semicolon after the closing parentheses. 
-
-Note: A previous version of this program always ran the commands via the default shell. Now,
-the shell is only used if *explicitly* invoked.
-
-#### Quotes
-Please take some time to understand what the following two sentences *exactly* mean:
-1. All characters between two matching quotes or between two curly braces `{ }` are treated as a single argument.
-2. All characters following an unmatched quote or unclosed open curly brace will be ignored.
-
-If you'd like to see examples of this quoting in action, check out [tm_quirks_exec.txt](../main/tests/tm_quirks_exec.txt)
-
-If you do plan on calling a shell script and would prefer not to write one in a file elsewhere, 
-you can write the script directly in the machine file!
-```
-q0: 0 > q1; 1>q0;
-q1:
-   0>q1;
-   $(sh -c {
-      NUM=10
-      while [ "$NUM" -ge 0 ]; do
-         echo "$NUM ..." # does this really need quotes?
-		 echo 'literally just $NUM'
-         sleep 0.1
-         NUM=$((NUM - 1))
-      done
-	  { echo foo; echo fum; } >> out.txt
-   }
-   );
-   1 > q2;
-```
-Note that in the above example, everything between the curly braces is passed to `sh -c` as a single
-string (newlines, spaces, tabs, quotes, inner curly braces and all). These braces are useful if you plan 
-on writing a script that will make use of both single quote `'` and double quote `"` characters.
-
-Of course, please understand which shell you're calling and it's own syntactical quirks!
-```
-$ ls -lh /bin/sh
-lrwxrwxrwx 1 root root 1 May 17  2021 /bin/sh -> bash
-```
-Keep in mind that in the following command statement, `echo` is being
-directly run by `tmf` and not via an intermediate shell:
-```
-q0: 0>q1; $(echo one two three);
-```
-In the above case, `echo` is being given three separate arguments: "one", "two", and "three".
-```
-q0: 0>q1; $(echo 'one two three');
-```
-In this example, `echo` is being given a single argument: "one two three". Keep in mind that
-the command arguments in the following statements are identical to the above:
-```
-q0: 0>q1; $(echo "one two three");
-q1: 0>q0; $(echo {one two three});
-```
-
-Be careful with this feature, but have fun, too! :)
-
-### Note on nondeterminism
-This program employs no explicit parallelization when it comes to command executions for nondeterministic 
-machines. If you want something like that, maybe consider backgrounding (`command &`) or daemonizing your program. 
-All valid "immediately next" states will have their comands executed in an order that may not be totally
-consistent across machine steps as various nondeterministic branches continue, halt, or split into even more branches.
-<br />
-<br />
-If a single state is transitioned to multiple times within a single step of the machine, that destination state's
-command will only be run once. In the future, command execution will be extended to individual transitions! O_O
+*WARNING: Transitions cannot be defined for state names that match any of these four directive names.*
 
 ## Sleep
-The sleep command-line option '-s' may be useful in seeing how your
-machine computes in real time. Depending on the machine type, the progress of the tape, stack, and/or 
-input string is shown after each state transition. For example, the following command will sleep 
-250 milliseconds between each verbose output step:
+The sleep command-line option '-s' is useful in seeing how your machine computes input in real time. Depending on the machine type, the progress of the tape, stack, and/or input string is shown after each state transition. For example, the following command will sleep 250 milliseconds between each verbose in-place output step:
 ```
-$ ./tmf samples/tm_0lenPow2.txt 00000000 -v -s 0.25
+$ ./tmf samples/tm_0lenPow2.tmf 00000000 -p -s 0.25
 ```
+### Verbose Mode
+The '-v' verbose mode will print each transition/tape change to a new set of lines, while the '-p' verbose mode will print these changes in-place.
+
+Understand that verbose mode adds significant overhead to the machine engine. A machine takes little time to compute normally may take an enormous amount of time to finish in verbose mode, especially depending on your specific terminal's settings.
 
 ## Regex
 Using the '-r' argument, a regex string may be supplied
@@ -375,22 +298,35 @@ a*          Kleene star
 a+          Repeat at least once
 a|b         Union
 ```
-An NFA is built from this regex and matched against
-the string(s) supplied. Example usage for regex:
-```
-$./tmf -r '(ab)*' ababab
-=>ababab
-	ACCEPTED
-```
-This NFA, or any NFA supplied by file, can be converted
-to a minimal DFA with the '-d' argument.
+This will generate an nondeterministic finite automaton using
+[Thompson's construction](https://en.wikipedia.org/wiki/Thompson%27s_construction) that recognizes the language of the regex.
 
-## Disclaimer
-I'm quite confident with how this program handles DFAs, NFAs, PDAs, and TMs.
-Things get quite gnarly when it comes to nondeterministic TMs though, so I
-cannot guarantee this program will execute those properly for every configuration yet.
-<br />
-<br />
-Also, once upon a time "otto" was the name of this repo and program, but that name is
-already shared by a good number of other repos out there. I hate to part with a 
-palindrome, but here's to tmfuck!
+Only printable, non-whitespace ASCII characters excluding '(', ')', '*', '+', and '|' are currently supported for regex.
+
+## Machine file output
+If you would like to create a machine file from a regex (or any tmf machine), simply use the '-c' parameter with no input string, which will print the machine to console, where it can be redirected to a file:
+```
+$ ./tmf -r '(a|b|c|d)*' -c > myreg.tmf
+$ cat myreg.tmf
+start: q14;
+final: q15;
+q0: a > q1;
+q1: > q5;
+q2: b > q3;
+q3: > q5;
+q4: > q0,q2;
+q5: > q9;
+q6: c > q7;
+q7: > q9;
+q8: > q4,q6;
+q9: > q13;
+q10: d > q11;
+q11: > q13;
+q12: > q8,q10;
+q13: > q12,q15;
+q14: > q12,q15;
+```
+Using the overloaded '-cc' parameter will output the machine file in a more readable format for machines with many transitions per state and large lists of symbols.
+
+*Note: The '-c' options do not preserve variables used in the original machine file. Instead, the individual input symbols of that variable are printed, which can significantly increase the verbosity of the output (see [spec_novar.tmf](../main/samples/spec_novars.tmf) ).*
+
