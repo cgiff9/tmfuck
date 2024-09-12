@@ -1447,7 +1447,7 @@ void Stack_print(struct Stack *stk0)
 	num_chars += snprintf(buff + num_chars, buff_len, fmt, cell);
 */
 
-	if (num_chars <= tape_print_width) {
+	if (!begin && num_chars <= tape_print_width) {
 		printf("   %s", buff);
 	} else {
 		printf("...%s", buff + num_chars - tape_print_width);
