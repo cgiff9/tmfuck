@@ -21,7 +21,7 @@ This [example](../main/samples/busy-beaver/tm_bb4_107.tmf) Turing machine will e
 ```
 start: q0;
 final: qh;
-blank: 0;     #default blank is _ (underscore)
+blank: 0;     # default blank is _ (underscore)
 
 q0: 0 > q1(1,R); 1 > q1(1,L);
 q1: 0 > q0(1,L); 1 > q2(0,L);
@@ -132,7 +132,7 @@ In this case, on input symbol 'A', the machine pushes a 'B' to the stack, writes
 *NOTE: These three operations (tape write, tape direction, and stack pop/push) may be listed in any order between the parentheses, but each operation type may appear at most once.*
 
 #### Tape Properties
-The tape extends "infinitely" in both directions, and the default blank character is the '_' underscore. This character may be changed to any type of symbol, including integers outside the printable ASCII range (see the "Directives" section below).
+The tape extends "infinitely" in both directions, and the default blank character is the '\_' underscore. This character may be changed to any type of symbol, including integers outside the printable ASCII range (see the [Directives](#directives) section below).
 
 ## More Syntax
 
@@ -283,7 +283,7 @@ $ ./tmf samples/tm_0lenPow2.tmf 00000000 -p -s 0.25
 ### Verbose Mode
 The '-v' verbose mode will print each transition/tape change to a new set of lines, while the '-p' verbose mode will print these changes in-place.
 
-Understand that verbose mode adds significant overhead to the machine engine. A machine takes little time to compute normally may take an enormous amount of time to finish in verbose mode, especially depending on your specific terminal's settings.
+Understand that verbose mode adds significant overhead to the machine engine. A machine that takes little time to compute normally may take an enormous amount of time to finish in verbose mode, especially depending on your specific terminal's settings.
 
 ## Regex
 Using the '-r' argument, a regex string may be supplied

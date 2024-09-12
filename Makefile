@@ -1,10 +1,10 @@
 CC = gcc
 
-CFLAGS = -lxxhash -Wall -Wextra -O2
-LOCALXXHASHFLAGS = -Wall -Wextra -O2
+CFLAGS = -lxxhash -lm -Wall -Wextra -O2
+LOCALXXHASHFLAGS = -lm -Wall -Wextra -O2
 
-DEBUGFLAGS = -lxxhash -Wall -Wextra -g -pg
-DEBUGLOCALXXHASHFLAGS = -Wall -Wextra -g -pg
+DEBUGFLAGS = -lxxhash -lm -Wall -Wextra -g -pg
+DEBUGLOCALXXHASHFLAGS = -lm -Wall -Wextra -g -pg
 
 default:
 	$(CC) -o tmf tmfuck.c auto.c block.c file.c machine.c regex.c stack.c var.c tape.c $(CFLAGS)

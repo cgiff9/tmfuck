@@ -1103,7 +1103,7 @@ int PDA_run(struct Automaton *a0, struct Tape *input_tape)
 			}
 
 			state_ptr = Stack_pop(&current_states);
-			tape_ptr->head = head = *(ptrdiff_t *)Stack_pop(&current_heads);
+			tape_ptr->head = head = *(HEAD_TYPE *)Stack_pop(&current_heads);
 			stack_ptr = Stack_pop(&current_stacks);
 
 			run_cond = tape_ptr->head < tapesize;
@@ -1301,7 +1301,7 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 			}
 
 			state_ptr = Stack_pop(&current_states);
-			tape_ptr->head = head = *(ptrdiff_t *)Stack_pop(&current_heads);
+			tape_ptr->head = head = *(HEAD_TYPE *)Stack_pop(&current_heads);
 			stack_ptr = Stack_pop(&current_stacks);
 
 			run_cond = tape_ptr->head < tapesize;
@@ -1561,11 +1561,11 @@ int NFA_run(struct Automaton *a0, struct Tape *input_tape)
 
 			if (!current_states.size) {
 				state_ptr = NULL;
-				goto run_end;
+				break;
 			}
 
 			state_ptr = Stack_pop(&current_states);
-			tape_ptr->head = head = *(ptrdiff_t *)Stack_pop(&current_heads);
+			tape_ptr->head = head = *(HEAD_TYPE *)Stack_pop(&current_heads);
 
 			run_cond = tape_ptr->head < tapesize;
 
@@ -1684,11 +1684,11 @@ int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 			if (!current_states.size) {
 				state_ptr = NULL;
-				goto run_end;
+				break;
 			}
 
 			state_ptr = Stack_pop(&current_states);
-			tape_ptr->head = head = *(ptrdiff_t *)Stack_pop(&current_heads);
+			tape_ptr->head = head = *(HEAD_TYPE *)Stack_pop(&current_heads);
 
 			run_cond = tape_ptr->head < tapesize;
 
