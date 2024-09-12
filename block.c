@@ -129,149 +129,34 @@ struct Block Block_init(enum BlockType type)
 		case STATE:
 			newstrip = Stack_init_max(STATE_STACK, block.max);
 			block.hash = Stack_init_max(STATEPTR, block.hashmax);
-			//block.data = malloc(sizeof(struct State *) * block.countmax);
 			break;
 		case TRANS:
 			newstrip = Stack_init_max(TRANS_STACK, block.max);
 			block.hash = Stack_init_max(TRANSPTR, block.hashmax);
-			//block.data = malloc(sizeof(struct Trans *) * block.countmax);
 			break;
 		case VAR:
 			newstrip = Stack_init_max(VAR_STACK, block.max);
 			block.hash = Stack_init_max(VARPTR, block.hashmax);
-			//block.data = malloc(sizeof(struct Var *) * block.countmax);
 			break;
 		case NAME:
 			newstrip = Stack_init_max(CHAR, block.max);
-			//block.data = Stack_init_max(CHAR, block.max);
-			//block.data = malloc(sizeof(char *) * block.countmax);
 			break;
 		case STACK:
 			newstrip = Stack_init_max(STACK_STACK, block.max);
-			//block.data = Stack_init_max(STACK_STACK, block.max);
-			//block.data = malloc(sizeof(struct Stack *) * block.countmax);
 			break;
 		case TAPE:
 			newstrip = Stack_init_max(TAPE_STACK, block.max);
-			//block.data = Stack_init_max(TAPE_STACK, block.max);
-			//block.data = malloc(sizeof(struct Tape *) * block.countmax);
 			break;
 	}
 
 	Stack_push(&block.data, &newstrip);
 	
-	/*
-	// Null check **data ptrs
-	if (block.data == NULL) {
-		fprintf(stderr, "Error allocating initial memory for **data in Block\n");
-		exit(EXIT_FAILURE);
-	}
-	
-	switch(type) {
-		case STATE:
-			block.hash = malloc(sizeof(struct State *) * block.hashmax);
-			block.data[0] = malloc(sizeof(struct State) * block.max);
-			break;
-		case TRANS:
-			block.hash = malloc(sizeof(struct Trans *) * block.hashmax);
-			block.data[0] = malloc(sizeof(struct Trans) * block.max);
-			break;
-		case VAR:
-			block.hash = malloc(sizeof(struct Var *) * block.hashmax);
-			block.data[0] = malloc(sizeof(struct Var) * block.max);
-			break;
-		case NAME:
-			block.initial = 32;
-			block.max = block.initial;
-			block.hash = NULL;
-			//note ->calloc, pre-filled with null terminators
-			block.data[0] = calloc(block.max, sizeof(char));
-			break;
-		case STACK:
-			block.hash = NULL;
-			block.data[0] = malloc(sizeof(struct Stack) * block.max);
-			break;
-		case TAPE:
-			block.hash = NULL;
-			block.data[0] = malloc(sizeof(struct Tape) * block.max);
-			break;
-	}
-
-	if (block.data[0] == NULL) {
-		fprintf(stderr, "Error allocating initial memory for **data element in Block\n");
-		Block_free(&block);
-		exit(EXIT_FAILURE);
-	} else if (block.hash == NULL && 
-			block.type != NAME && 
-			block.type != STACK &&
-			block.type != TAPE) {
-		fprintf(stderr, "Error allocating initial memory for **hash in Block\n");
-		Block_free(&block);
-		exit(EXIT_FAILURE);
-	}
-
-	for (size_t i = 1; i < block.countmax; i++) block.data[i] = NULL;
-	if (block.type != NAME && 
-			block.type != STACK &&
-			block.type != TAPE)
-		for (size_t i = 0; i < block.hashmax; i++) block.hash[i] = NULL;
-	*/
-
 	return block;
-}
-
-// Translates an 'expected' index (nth element) into a Block data[][] *void pointer
-//
-// Returns pointer to block element at requested index
-// Returns NULL if element doesn't exist
-void *Block_addr(struct Block *block, size_t index)
-{
-	if (index >= block->size) return NULL;
-
-	return NULL;
-	/*
-	size_t strip_no = 0;
-	size_t strip_size = block->initial;
-	size_t total_size = block->initial;
-	while(index >= total_size) {
-		size_t new_total_size = total_size * block->multiplier;
-		strip_size = new_total_size - total_size;
-		total_size = new_total_size;
-		strip_no++;
-	}
-	
-	size_t strip_index = strip_size - (total_size - index);
-
-	//printf("strip_no: %zu\n", strip_no);
-	//printf("strip_index: %zu\n", strip_index);
-	//printf("strip_size: %zu\n", strip_size);
-	//printf("total_size: %zu\n", total_size);
-	
-	switch(block->type) {
-		case STATE:
-			return block->data[strip_no] + strip_index * sizeof(struct State);
-			break;
-		case TRANS:
-			return block->data[strip_no] + strip_index * sizeof(struct Trans);
-			break;
-		case VAR:
-			return block->data[strip_no] + strip_index * sizeof(struct Var);
-			break;
-		case NAME:
-			break;
-		case STACK:
-			return block->data[strip_no] + strip_index * sizeof(struct Stack);
-			break;
-		case TAPE:
-			return block->data[strip_no] + strip_index * sizeof(struct Tape);
-			break;
-	}
-	return NULL;*/
 }
 
 void Block_grow(struct Block *block)
 {
-	// See block.h for more info
+	// See block.h for more info on macros below
 	if (block->type == NAME) {
 		block->max BLOCK_NAME_GROWTH_FUNC;
 	} else {
@@ -348,7 +233,6 @@ void Block_grow(struct Block *block)
 					};
 
 					XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
-					//XXH64_hash_t check = XXH3_64bits(hashbuff, strlen(hashbuff)) % block->hashmax;
 
 					XXH64_hash_t offset = check;
 					struct Trans *transcheck = hash_elem[offset];
@@ -394,7 +278,6 @@ void Block_grow(struct Block *block)
 		break;
 		case TAPE:
 		break;
-
 	}
 
 	return;

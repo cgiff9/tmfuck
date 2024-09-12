@@ -1,7 +1,7 @@
 
 # tmfuck
 
-A simple free-form interpreted language for building Turing machines and other automata. Deterministic and nondeterministic variants of the following machine types are supported:
+A simple free-form interpreted language for building Turing machines and other automata.
 - [x] Finite automata (DFA, NFA)
 - [x] Pushdown automata (PDA, DPDA)
 - [x] Turing machines (TM, NTM)
@@ -41,13 +41,13 @@ git clone https://github.com/cgiff9/tmfuck
 cd tmfuck
 make tmf
 ```
-If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can help you set the include statements across the tmf source and download the needed files for xxHash:
+If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can reconfigure the source files and download the necessary xxHash source files for you:
 ```
 ./xxhash_conf.sh local
 ./xxhash_conf.sh download
 make localtmf
 ```
-Then you'll have a tmf binary compiled with the downloaded xxhash header and source file. If you wish to recompile using your system's installed xxHash library, you can reset the #include statements and compile normally:
+Then you'll have a tmf binary compiled with the downloaded xxhash source files. If you wish to recompile using your system's installed xxHash library, you can reset the tmf source files and compile normally:
 ```
 ./xxhash_conf.sh system
 make tmf
@@ -244,15 +244,11 @@ q3: i > q4; *#</b></code></pre>
 The commented code portions are shown in bold above. Being a free-form language, comments in tmf may be placed *almost* anywhere, so long as the code excluding them is valid.
 
 ## Nondeterminism
-What this program considers to be deterministic and nondeterministic 
-diverges somewhat from the theoretical definitions. For a machine to
-run in tmf's nondeterministic engine, it must contain at least 
-one transition with at least one of the following properties:
-1. It specifies multiple destinations for a single input symbol.
-2. It makes use of one or more epsilon transitions.
+What this program considers to be deterministic and nondeterministic diverges somewhat from the theoretical definitions. For a machine to run in tmf's nondeterministic engine, it must contain at least one state with at least one of the following properties:
+1. The state specifies multiple destinations for a single input symbol.
+2. The state makes use of one or more epsilon transitions.
 
-A machine with the above properties will be simulated using
-the nondeterministic engine. The '-n' parameter may be used to force a "deterministic" machine to run in the nondeterministic engine, if you'd like to compare their performance.
+The '-n' parameter may be used to force a "deterministic" machine to run in the nondeterministic engine, if you'd like to compare the performance of each engine.
 
 ### Epsilon Transitions
 Epsilon transitions specify a destination that can be reached without consuming/reading an input symbol. They can be defined in tmf by simply omitting any input characters before the '>' character:
@@ -262,8 +258,7 @@ q0: > q1(L);
 Epsilon transitions must always be explicitly invoked, meaning they can not be an element in an input symbol list or a variable.
 
 ## Machine File Directives
-There are four directives that govern important aspects
-of the machine file:
+There are four directives that govern important aspects of the machine file:
 #### Syntax
 ```
 start:   [one state];

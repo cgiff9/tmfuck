@@ -15,14 +15,6 @@
 // Return struct Stack
 struct Stack Stack_init(enum StackType type)
 {
-
-	/*	struct Stack stk0;
-	stk0.type = type;
-	stk0.size = 0;
-	stk0.max = 4;
-	stk0.elem = NULL;
-	//stk0.ptape = NULL;*/
-
 	return Stack_init_max(type, 0);
 }
 
@@ -65,6 +57,9 @@ struct Stack Stack_init_max(enum StackType type, size_t max)
 				break;
 			case PTRDIFFT:
 				stk0.elem = malloc(sizeof(ptrdiff_t) * stk0.max);
+				break;
+			case HEAD:
+				stk0.elem = malloc(sizeof(HEAD_TYPE) * stk0.max);
 				break;
 			case STATEPTR:
 				stk0.elem = malloc(sizeof(struct State *) * stk0.max);
@@ -157,6 +152,9 @@ size_t Stack_free(struct Stack *stk0)
 			break;
 		case PTRDIFFT:
 			return stk0->max * sizeof(ptrdiff_t);
+			break;
+		case HEAD:
+			return stk0->max * sizeof(HEAD_TYPE);
 			break;
 		case STATEPTR:
 			return stk0->max * sizeof(struct State *);
@@ -299,6 +297,9 @@ unsigned int Stack_push(struct Stack *stk0, void *sym)
 			case PTRDIFFT:
 				stk0->elem = malloc(sizeof(ptrdiff_t) * stk0->max);
 				break;
+			case HEAD:
+				stk0->elem = malloc(sizeof(HEAD_TYPE) * stk0->max);
+				break;
 			case STATEPTR:
 				stk0->elem = malloc(sizeof(struct State *) * stk0->max);
 				if (stk0->elem) {
@@ -385,6 +386,9 @@ unsigned int Stack_push(struct Stack *stk0, void *sym)
 				break;
 			case PTRDIFFT:
 				newelem = realloc(stk0->elem, sizeof(ptrdiff_t) * stk0->max);
+				break;
+			case HEAD:
+				newelem = realloc(stk0->elem, sizeof(HEAD_TYPE) * stk0->max);
 				break;
 			case STATEPTR:
 				newelem = realloc(stk0->elem, sizeof(struct State *) * stk0->max);
@@ -499,6 +503,12 @@ unsigned int Stack_push(struct Stack *stk0, void *sym)
 				tmpelem[stk0->size] = *(ptrdiff_t *)sym;
 			}
 			break;
+		case HEAD:
+			{
+				HEAD_TYPE *tmpelem = stk0->elem;
+				tmpelem[stk0->size] = *(HEAD_TYPE *)sym;
+			}
+			break;
 		case STATEPTR:
 			{
 				struct State **tmpelem = stk0->elem;
@@ -556,6 +566,9 @@ signed long int Stack_push_unique(struct Stack *stk0, void *sym)
 			case PTRDIFFT:
 				stk0->elem = malloc(sizeof(ptrdiff_t) * stk0->max);
 				break;
+			case HEAD:
+				stk0->elem = malloc(sizeof(HEAD_TYPE) * stk0->max);
+				break;
 			case STATEPTR:
 				stk0->elem = malloc(sizeof(struct State *) * stk0->max);
 				break;
@@ -602,6 +615,9 @@ signed long int Stack_push_unique(struct Stack *stk0, void *sym)
 				break;
 			case PTRDIFFT:
 				newelem = realloc(stk0->elem, sizeof(ptrdiff_t) * stk0->max);
+				break;
+			case HEAD:
+				newelem = realloc(stk0->elem, sizeof(HEAD_TYPE) * stk0->max);
 				break;
 			case STATEPTR:
 				newelem = realloc(stk0->elem, sizeof(struct State *) * stk0->max);
@@ -665,7 +681,15 @@ signed long int Stack_push_unique(struct Stack *stk0, void *sym)
 				tmpelem[stk0->size] = *(ptrdiff_t *)sym;
 			}
 			break;
-
+		case HEAD:
+			{
+				HEAD_TYPE *tmpelem = stk0->elem;
+				for (unsigned int i = 0; i < stk0->size; i++) {
+					if (tmpelem[i] == *(HEAD_TYPE *)sym) return -1; //stk0->size;
+				}
+				tmpelem[stk0->size] = *(HEAD_TYPE *)sym;
+			}
+			break;
 		case STATEPTR:
 			{
 				struct State **tmpelem = stk0->elem;
@@ -852,6 +876,12 @@ void Stack_copy(struct Stack *dest, struct Stack *src)
 				else
 					tmpelem = realloc(dest->elem, sizeof(ptrdiff_t) * src->max);
 				break;
+			case HEAD:
+				if (dest->elem == NULL)
+					tmpelem = malloc(sizeof(HEAD_TYPE) * src->max);
+				else
+					tmpelem = realloc(dest->elem, sizeof(HEAD_TYPE) * src->max);
+				break;
 			case STATEPTR:
 				if (dest->elem == NULL)
 					tmpelem = malloc(sizeof(struct State *) * src->max);
@@ -915,6 +945,9 @@ void Stack_copy(struct Stack *dest, struct Stack *src)
 			break;
 		case PTRDIFFT:
 			numbytes = src->size * sizeof(ptrdiff_t);
+			break;
+		case HEAD:
+			numbytes = src->size * sizeof(HEAD_TYPE);
 			break;
 		case STATEPTR:
 			numbytes = src->size * sizeof(struct State *);
@@ -1007,12 +1040,17 @@ void *Stack_get(struct Stack *stk0, unsigned int index)
 			{
 			CELL_TYPE *tmpelem = stk0->elem;
 			return &tmpelem[index];
-			//return tmpelem + index * sizeof(CELL_TYPE);
 			}
 			break;
 		case PTRDIFFT:
 			{
 			ptrdiff_t *tmpelem = stk0->elem;
+			return &tmpelem[index];
+			}
+			break;
+		case HEAD:
+			{
+			HEAD_TYPE *tmpelem = stk0->elem;
 			return &tmpelem[index];
 			}
 			break;
@@ -1127,6 +1165,12 @@ void *Stack_pop(struct Stack *stk0)
 			return &tmpelem[--stk0->size];
 			}
 			break;
+		case HEAD:
+			{
+			HEAD_TYPE *tmpelem = stk0->elem;
+			return &tmpelem[--stk0->size];
+			}
+			break;
 		case STATEPTR:
 			{
 			struct State **tmpelem = stk0->elem;
@@ -1236,6 +1280,12 @@ void *Stack_peek(struct Stack *stk0)
 			return &tmpelem[stk0->size-1];
 			}
 			break;
+		case HEAD:
+			{
+			HEAD_TYPE *tmpelem = stk0->elem;
+			return &tmpelem[stk0->size-1];
+			}
+			break;
 		case STATEPTR:
 			{
 			struct State **tmpelem = stk0->elem;
@@ -1277,94 +1327,6 @@ void *Stack_peek(struct Stack *stk0)
 	return NULL;
 }
 
-// Explicit 'get' functions
-// > does an enum BlockType check to ensure function
-//   is being used with the correct stack
-//
-// Returns element at specified index (no dereferencing needed)
-// > Return -1 or NULL if index too large
-/*
-signed short int Stack_char_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return -1;
-	if (stack->type != CHAR) return -1;
-	char *tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-//signed long int Stack_cell_get(struct Stack *stack, unsigned int index)
-ptrdiff_t Stack_cell_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return PTRDIFF_MIN;
-	//if (index >= stack->max) return PTRDIFF_MIN;
-	if (stack->type != CELL) return PTRDIFF_MIN;
-	CELL_TYPE *tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-ptrdiff_t Stack_ptrdifft_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return -1;
-	if (stack->type != PTRDIFFT) return -1;
-	ptrdiff_t *tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-struct State *Stack_Stateptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return NULL;
-	if (stack->type != STATEPTR) return NULL;
-
-	struct State **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-struct Var *Stack_Varptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return NULL;
-	if (stack->type != VARPTR) return NULL;
-
-	struct Var **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-char *Stack_charptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size) return NULL;
-	if (stack->type != CHARPTR) return NULL;
-
-	char **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-struct Stack *Stack_Stackptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size || !stack->elem) return NULL;
-	if (stack->type != STACKPTR) return NULL;
-
-	struct Stack **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-struct Trans *Stack_Transptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size || !stack->elem) return NULL;
-	if (stack->type != TRANSPTR) return NULL;
-
-	struct Trans **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-
-struct Tape *Stack_Tapeptr_get(struct Stack *stack, unsigned int index)
-{
-	if (index >= stack->size || !stack->elem) return NULL;
-	if (stack->type != TAPEPTR) return NULL;
-
-	struct Tape **tmpelem = stack->elem;
-	return tmpelem[index];
-}
-*/
-
 // Initializes new stack in automaton's stack block 
 //
 // Optional stack ptr may be provided that will
@@ -1400,6 +1362,9 @@ struct Stack *Stack_add(struct Automaton *a0, enum StackType type)
 		case PTRDIFFT:
 			*newstack = Stack_init(PTRDIFFT);
 			break;
+		case HEAD:
+			*newstack = Stack_init(HEAD);
+			break;
 		case STATEPTR:
 			*newstack = Stack_init(STATEPTR);
 			break;
@@ -1431,123 +1396,10 @@ struct Stack *Stack_add(struct Automaton *a0, enum StackType type)
 }
 
 
-/*
-signed long int Stack_Stateptr_index(struct Stack *stack, struct State *state)
-{
-	if (stack->elem == NULL) return -1;
-	struct State **elem = stack->elem;
-	for (unsigned int i = 0; i < stack->size; i++) {
-		//struct State *elem = Stack_Stateptr_get(stack, i);
-		if (elem[i] == state) return i;
-	}
-	return -1;
-}
-*/
-
-// Explicit 'pop' functions
-// Removes element from top of stack
-// > Allocated memory for void *elem is not
-//   adjusted. The 'size' field simply
-//   determines which elements are considered
-//   stored (lazy deletion).
+// Prints stack to console
+// > Observes same print limit as struct Tape ('-w' parameter, default: TAPE_PRINT_MAX)
 //
-// Returns element at the top of the stack
-// > Returns -1 or NULL if stack empty
-// > (for char) -1 is never expected to be a 
-//   stack element value, so is used as empty
-//   return flag
-/*
-signed short int Stack_char_pop(struct Stack *stack)
-{
-	if (!stack->size) return -1;
-	if (stack->type != CHAR) return -1;
-	char *tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-//signed long int Stack_cell_pop(struct Stack *stack)
-ptrdiff_t Stack_cell_pop(struct Stack *stack)
-{
-	if (!stack || !stack->size) return -1;
-	if (stack->type != CELL) return -1;
-	CELL_TYPE *tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-ptrdiff_t Stack_ptrdifft_pop(struct Stack *stack)
-{
-	if (!stack || !stack->size) return -1;
-	if (stack->type != PTRDIFFT) return -1;
-	ptrdiff_t *tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-struct State *Stack_Stateptr_pop(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	if (stack->type != STATEPTR) return NULL;
-	struct State **tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-struct Var *Stack_Varptr_pop(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	if (stack->type != VARPTR) return NULL;
-	struct Var **tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-struct Stack *Stack_Stackptr_pop(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	//if (stack->type != STACKPTR) return NULL;
-	struct Stack **tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-struct Trans *Stack_Transptr_pop(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	if (stack->type != TRANSPTR) return NULL;
-	struct Trans **tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-struct Tape *Stack_Tapeptr_pop(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	if (stack->type != TAPEPTR) return NULL;
-	struct Tape **tmpelem = stack->elem;
-	return tmpelem[--stack->size];
-}
-
-signed short int Stack_char_peek(struct Stack *stack)
-{
-	if (!stack->size) return -1;
-	if (stack->type != CHAR) return -1;
-	char *tmpelem = stack->elem;
-	return tmpelem[stack->size - 1];
-}
-
-//signed long int Stack_cell_peek(struct Stack *stack)
-ptrdiff_t Stack_cell_peek(struct Stack *stack)
-{
-	if (!stack->size) return -1;
-	if (stack->type != CELL) return -1;
-	CELL_TYPE *tmpelem = stack->elem;
-	return tmpelem[stack->size - 1];
-}
-
-struct State *Stack_Stateptr_peek(struct Stack *stack)
-{
-	if (!stack->size) return NULL;
-	if (stack->type != STATEPTR) return NULL;
-	struct State **tmpelem = stack->elem;
-	return tmpelem[stack->size - 1];
-}
-*/
-
+// Returns void
 void Stack_print(struct Stack *stk0)
 {
 	if (!stk0->size) return;

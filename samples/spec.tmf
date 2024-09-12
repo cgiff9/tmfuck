@@ -307,7 +307,6 @@ state2cmt_ML2:
 ELSEDIGIT = $ELSECHAR \ $DIGIT,'-';
 
 sym1:
-#	$SPACE > sym1; $ELSECHAR > sym2; ''' > symquote1; '>' > dest1;
 	$SPACE > sym1; $ELSEDIGIT > sym2; $DIGIT,'-' > sym1_dig; ''' > symquote1; '>' > dest1;
 	s > start1; f > final1; r > reject1; b > blkbnd1;
 	'#' > sym1cmt; '$' > varref1;
@@ -380,7 +379,6 @@ symquote2:
 ELSEDIGIT = $CHAR \ $DIGIT,'-';
 
 symlist1:
-#	$SPACE > symlist1; $CHAR > symlist2; ''' > symquote1;
 	$SPACE > symlist1; $ELSEDIGIT > symlist2; $DIGIT,'-' > symlist1_dig; ''' > symquote1;
 	'#' > symlist1cmt; '$' > varref1;
 symlist2:
@@ -1084,146 +1082,6 @@ ext27_dig_cmt_ML1:
 ext27_dig_cmt_ML2:
 	'#' > ext13; $MLRETRY > ext27_dig_cmt_ML1; '*' > ext27_dig_cmt_ML2;
 
-#*
-
-# push symbol: push is first following '('
-# then see if dir listed after ','
-##########################################
-push1:
-	$SPACE > push1; $CHAR > push2; ''' > pushquote1;
-	'#' > push1cmt;
-push2:
-	$SPACE > push2; ',' > push3; ')' > ext_end;
-	'#' > push2cmt;
-push3:
-	$SPACE > push3; $DIR > push4;
-	'#' > push3cmt;
-push4:
-	$SPACE > push4; ')' > ext_end;
-	'#' > push4cmt;
-
-push1cmt:
-	$ELSECOMMENT > push1cmt_L; '*' > push1cmt_ML1; $NL > push1;
-push1cmt_L:
-	$COMMENT > push1cmt_L; $NL > push1;
-push1cmt_ML1:
-	$MLCOMMENT > push1cmt_ML1; '*' > push1cmt_ML2;
-push1cmt_ML2:
-	'#' > push1; $MLRETRY > push1cmt_ML1;
-
-push2cmt:
-	$ELSECOMMENT > push2cmt_L; '*' > push2cmt_ML1; $NL > push2;
-push2cmt_L:
-	$COMMENT > push2cmt_L; $NL > push2;
-push2cmt_ML1:
-	$MLCOMMENT > push2cmt_ML1; '*' > push2cmt_ML2;
-push2cmt_ML2:
-	'#' > push2; $MLRETRY > push2cmt_ML1;
-
-push3cmt:
-	$ELSECOMMENT > push3cmt_L; '*' > push3cmt_ML1; $NL > push3;
-push3cmt_L:
-	$COMMENT > push3cmt_L; $NL > push3;
-push3cmt_ML1:
-	$MLCOMMENT > push3cmt_ML1; '*' > push3cmt_ML2;
-push3cmt_ML2:
-	'#' > push3; $MLRETRY > push3cmt_ML1;
-
-push4cmt:
-	$ELSECOMMENT > push4cmt_L; '*' > push4cmt_ML1; $NL > push4;
-push4cmt_L:
-	$COMMENT > push4cmt_L; $NL > push4;
-push4cmt_ML1:
-	$MLCOMMENT > push4cmt_ML1; '*' > push4cmt_ML2;
-push4cmt_ML2:
-	'#' > push4; $MLRETRY > push4cmt_ML1;
-
-# pop symbol: pop is first following '('
-# may be a combined push/pop (x>y)
-########################################
-pop1:
-	$SPACE > pop1; '>' > pop2;
-	'#' > pop1cmt;
-pop2:
-	$SPACE > pop2; $CHAR > pop3; ''' > poppushq1; ')' > ext_end;
-	'#' > pop2cmt;
-pop3:
-	$SPACE > pop3; ')' > ext_end;
-	'#' > pop3cmt;
-
-pop1cmt:
-	$ELSECOMMENT > pop1cmt_L; '*' > pop1cmt_ML1; $NL > pop1;
-pop1cmt_L:
-	$COMMENT > pop1cmt_L; $NL > pop1;
-pop1cmt_ML1:
-	$MLCOMMENT > pop1cmt_ML1; '*' > pop1cmt_ML2;
-pop1cmt_ML2:
-	'#' > pop1; $MLRETRY > pop1cmt_ML1;
-
-pop2cmt:
-	$ELSECOMMENT > pop2cmt_L; '*' > pop2cmt_ML1; $NL > pop2;
-pop2cmt_L:
-	$COMMENT > pop2cmt_L; $NL > pop2;
-pop2cmt_ML1:
-	$MLCOMMENT > pop2cmt_ML1; '*' > pop2cmt_ML2;
-pop2cmt_ML2:
-	'#' > pop2; $MLRETRY > pop2cmt_ML1;
-
-pop3cmt:
-	$ELSECOMMENT > pop3cmt_L; '*' > pop3cmt_ML1; $NL > pop3;
-pop3cmt_L:
-	$COMMENT > pop3cmt_L; $NL > pop3;
-pop3cmt_ML1:
-	$MLCOMMENT > pop3cmt_ML1; '*' > pop3cmt_ML2;
-pop3cmt_ML2:
-	'#' > pop3; $MLRETRY > pop3cmt_ML1;
-
-# dir symbol: direction is first following '('
-# > dir symbol could turn out to be an 'L' 
-#   or 'R' pop, so we check for '>' after ','
-##############################################
-dir1:
-	$SPACE > dir1; ',' > dir2; '>' > pop2; ')' > ext_end;
-	'#' > dir1cmt;
-dir2:
-	$SPACE > dir2; '>' > push1;
-	'#' > dir2cmt;
-
-dir1cmt:
-	$ELSECOMMENT > dir1cmt_L; '*' > dir1cmt_ML1; $NL > dir1;
-dir1cmt_L:
-	$COMMENT > dir1cmt_L; $NL > dir1;
-dir1cmt_ML1:
-	$MLCOMMENT > dir1cmt_ML1; '*' > dir1cmt_ML2;
-dir1cmt_ML2:
-	'#' > dir1; $MLRETRY > dir1cmt_ML1;
-
-dir2cmt:
-	$ELSECOMMENT > dir2cmt_L; '*' > dir2cmt_ML1; $NL > dir2;
-dir2cmt_L:
-	$COMMENT > dir2cmt_L; $NL > dir2;
-dir2cmt_ML1:
-	$MLCOMMENT > dir2cmt_ML1; '*' > dir2cmt_ML2;
-dir2cmt_ML2:
-	'#' > dir2; $MLRETRY > dir2cmt_ML1;
-
-# handle quoted push/pop chars
-# dir need not/must not be quoted
-#################################
-pushquote1:
-	$ANY > pushquote2;
-pushquote2:
-	''' > push2;
-popquote1:
-	$ANY > popquote2;
-popquote2:
-	''' > pop1;
-poppushq1:
-	$ANY > poppushq2;
-poppushq2:
-	''' > pop3;
-
-*#
 
 # Variable definitions: 
 ########################

@@ -163,11 +163,6 @@ extern CELL_TYPE CELL_MIN;
 
 struct State {
 	char *name;
-	//struct Stack *current;      // current stacks }
-	//struct Stack *next;         // next stacks    } used by Automaton_run()
-	//struct Stack *current_tapes;
-	//struct Stack *next_tapes;
-	//struct Stack *e_closure;
 
 	// FLAGS:
 	unsigned char start:1;
@@ -200,9 +195,6 @@ struct Trans {
 	unsigned char write:1;         // this trans has a tape write operation
 
 	unsigned char strans:1;    // this trans shares an inputsym and pstate with another
-	//unsigned char vargroup:2;  // this trans was added as part of a variable in the machine file
-										// 0 = no, 1=yes, 2=yes(alt)
-	//unsigned char symgroup:1;  // this trans was part of a list of symbols in the machine file
 	unsigned char exec:1;      // this trans has a command associated 
 };
 
@@ -222,8 +214,6 @@ struct Automaton {
 	struct Stack alphabet;
 	struct Stack delims;
 
-//	struct Stack symgroups;
-//	struct Stack vargroups;
 	unsigned char tm:1;
 	unsigned char pda:1;
 	
@@ -240,8 +230,6 @@ char *Name_add(struct Automaton *a0, char *name, int state);
 struct State *State_add(struct Automaton *a0, char *name);
 struct Trans *Trans_get(struct Automaton *a0, struct State *pstate, CELL_TYPE inputsym, 
 		XXH64_hash_t *offset_prev, int epsilon);
-//struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State *dstate, 
-//		ptrdiff_t sym, ptrdiff_t pop, ptrdiff_t push, ptrdiff_t dir, ptrdiff_t write, int epsilon);
 struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State *dstate, 
 		CELL_TYPE *inputsym, CELL_TYPE *popsym, CELL_TYPE *pushsym, CELL_TYPE *dir, CELL_TYPE *writesym);
 void set_start(struct Automaton *a0, struct State *s0);

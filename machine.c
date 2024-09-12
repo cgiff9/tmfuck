@@ -61,7 +61,7 @@ struct timespec nsleep_calc(double seconds)
 //
 //   Returns void (automaton whose transitions properly
 //   reflect the prescence of these epsilon loops)
-void set_marks(struct Automaton *a0)
+void epsilon_loop_detect(struct Automaton *a0)
 {
 	struct Stack sym_states = Stack_init(STATEPTR);
 	struct Stack e_states = Stack_init(STATEPTR);
@@ -138,539 +138,28 @@ void set_marks(struct Automaton *a0)
 	Stack_free(&e_trans);
 }
 
-int Automaton_run_nd(struct Automaton *a0, struct Tape *input_tape)
-{
-	struct timespec req, rem;
-	if (delay) {
-		req = nsleep_calc(delay);
-	}
-
-	struct Stack current_states = Stack_init(STATEPTR);
-	struct Stack next_states = Stack_init(STATEPTR);
-	struct Stack current_tapes = Stack_init(TAPEPTR);
-	struct Stack next_tapes = Stack_init(TAPEPTR);
-	struct Stack current_heads = Stack_init(PTRDIFFT);
-	struct Stack next_heads = Stack_init(PTRDIFFT);
-	struct Stack current_stacks;
-	struct Stack next_stacks;
-
-	struct Stack empty_tapes = Stack_init(TAPEPTR);
-	struct Stack empty_tapes_ghost = Stack_init(TAPEPTR);
-	struct Stack empty_stacks;
-
-	struct Stack *first_stack = NULL;
-	if (is_pda) {
-		next_stacks = Stack_init(STACKPTR);
-		current_stacks = Stack_init(STACKPTR);
-		empty_stacks = Stack_init(STACKPTR);
-		first_stack = Stack_add(a0, CELL);
-		Stack_push(&current_stacks, &first_stack);
-	}
-
-	if (!is_tm) Stack_push(&current_heads, &input_tape->head);
-
-	Stack_push(&current_states, &a0->start);
-	Stack_push(&current_tapes, &input_tape);
-
-		if (!is_tm && input_tape->tape.size == input_tape->tape.max) {
-		Stack_push(&input_tape->tape, &tm_blank);
-		input_tape->tape.size--;
-	}
-	long int tapesize = input_tape->tape.size;
-
-	struct State *state_ptr = NULL;
-	struct Tape *tape_ptr = input_tape;
-	struct Stack *stack_ptr = NULL;
-	unsigned int head = 0;
-
-	int sym_trans = 0;
-	int newlines = 0;
-	size_t steps = 0;
-	int run_cond = 0;
-	int loop_halt = 0;
-
-	while (current_states.size || next_states.size) {
-
-		state_ptr = Stack_pop(&current_states);
-		if (is_tm) {
-			tape_ptr = Stack_pop(&current_tapes);
-		} else {
-			tape_ptr->head = head = *(ptrdiff_t *)Stack_pop(&current_heads);
-			//if (head > max_head) max_head = head;
-		}
-		if (is_pda) stack_ptr = Stack_pop(&current_stacks);
-
-		run_cond = !is_tm && tape_ptr->head < tapesize;
-
-		if (state_ptr->final && (is_tm || !run_cond)) {
-			break;
-		}
-
-		// For NFA,PDA: If tape end reached, only allow epsilon transitions
-		if (state_ptr->syms && (is_tm || run_cond)) {
-			CELL_TYPE input_sym = Tape_head(tape_ptr);
-
-			XXH64_hash_t offset = a0->trans.hashmax;
-			struct Trans *trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);	
-			int strans = 0;
-
-			while (trans_ptr) {
-				strans += trans_ptr->strans;
-
-				struct Stack *stack_new = stack_ptr;
-				struct Tape *tape_new = tape_ptr;
-				
-				CELL_TYPE *pda = &trans_ptr->popsym;
-				if (is_pda) {
-					stack_new = Stack_pop(&empty_stacks);	
-					if (!stack_new) stack_new = Stack_add(a0, CELL);
-					Stack_copy(stack_new, stack_ptr);
-
-					if (trans_ptr->pop) {
-						if (((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym)) {
-							Stack_pop(stack_new);
-							if (trans_ptr->push) {
-								Stack_push(stack_new, &trans_ptr->pushsym);
-							}
-						}
-					} else if (trans_ptr->push) {
-						Stack_push(stack_new, &trans_ptr->pushsym);
-					}
-				}
-
-				if (pda) {
-
-					if (is_tm) {						
-						if (0&&trans_ptr->strans && !trans_ptr->write) { 
-							tape_new = Stack_pop(&empty_tapes_ghost);
-							if (!tape_new) tape_new = Tape_add(a0);
-							Tape_ghost(tape_new, tape_ptr);
-						} else {
-							tape_new = Stack_pop(&empty_tapes);
-							if (!tape_new) tape_new = Tape_add(a0);
-							Tape_copy(tape_new, tape_ptr);
-						}
-						
-						if (trans_ptr->write) Tape_write(tape_new, &trans_ptr->writesym);
-						Tape_pos(tape_new, trans_ptr->dir);
-					} else {
-						//Tape_ghost(tape_new, tape_ptr);
-						Tape_pos(tape_new, 2);
-					}
-
-					if (!trans_ptr->dstate->reject) {
-						sym_trans = 1;
-						
-						/*if (1||is_tm) {
-						  Stack_push(&next_states, &trans_ptr->dstate);
-						  Stack_push(&next_tapes, &tape_new);
-						  if (is_pda) {
-						  Stack_push(&next_stacks, &stack_new);
-						  }
-						  } else {
-						  Stack_push(&current_states, &trans_ptr->dstate);
-						  Stack_push(&current_tapes, &tape_new);
-						  if (is_pda) {
-						  Stack_push(&current_stacks, &stack_new);
-						  }
-						  }*/
-
-						Stack_push(&current_states, &trans_ptr->dstate);
-						if (is_tm) {
-							Stack_push(&current_tapes, &tape_new);
-						} else { 
-							Stack_push(&current_heads, &tape_new->head);
-							//tape_ptr->head = head; // 'reset' head for other transitions
-						}
-
-						if (is_pda) {
-							Stack_push(&current_stacks, &stack_new);
-						}
-					} 
-
-					if (flag_verbose) {
-						Trans_print(trans_ptr);
-						putchar('\n');
-						newlines++;
-						printf("%*s tape:  ", longest_name, trans_ptr->dstate->name);
-						Tape_print(tape_new);
-						putchar('\n');
-						newlines++;
-						if (is_pda) {
-							printf("%*s stack: ", longest_name, trans_ptr->dstate->name);
-							Stack_print(stack_new);
-							putchar('\n');
-							newlines++;
-						}
-					}
-
-					if (!is_tm) tape_ptr->head = head;
-				}
-
-				if (trans_ptr->strans) 
-					trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);
-				else 
-					break;
-			}
-
-			if (flag_verbose && offset == a0->trans.hashmax) {
-				printf("%s:%*s", state_ptr->name, longest_name, " ");
-				Trans_sym_print(input_sym);
-				printf(" >\n");
-				newlines++;
-
-				//if (is_tm) {
-					//printf("   tape: ");
-					printf(" %*s: ", longest_name, "rejected");
-					Tape_print(tape_ptr);
-					putchar('\n');
-					newlines++;
-				//}
-				if (is_pda) {
-					printf(" %*s: ", longest_name, "stack");
-					Stack_print(&empty_stacks);
-					putchar('\n');
-					newlines++;
-				}
-			}
-		}
-
-		if (state_ptr->epsilon) {
-
-			XXH64_hash_t offset = a0->trans.hashmax;
-			struct Trans *trans_ptr = Trans_get(a0, state_ptr, CELL_MAX, &offset, 1);	
-			int strans = 0;
-			while (trans_ptr) {
-				/*for (unsigned int i = 0; i < state_ptr->e_closure->size; i++) 
-				  struct Trans *trans_ptr = Stack_Transptr_get(state_ptr->e_closure, i);
-				  if (trans_ptr->pstate != state_ptr) break;*/
-
-				strans += trans_ptr->strans;
-				struct Stack *stack_new = stack_ptr;
-				struct Tape *tape_new = tape_ptr;
-				
-				CELL_TYPE *pda = &trans_ptr->popsym;
-				if (is_pda) {
-					stack_new = Stack_pop(&empty_stacks);	
-					if (!stack_new) stack_new = Stack_add(a0, CELL);
-					Stack_copy(stack_new, stack_ptr);
-
-					if (trans_ptr->pop) {
-						if (((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym)) {
-							Stack_pop(stack_new);
-							if (trans_ptr->push) {
-								Stack_push(stack_new, &trans_ptr->pushsym);
-							}
-						}
-					} else if (trans_ptr->push) {
-						Stack_push(stack_new, &trans_ptr->pushsym);
-					}
-				}
-
-				if (pda) {
-
-					if (is_tm) {
-						//tape_new = Stack_Tapeptr_pop(&empty_tapes);
-						//if (!tape_new) tape_new = Tape_add(a0);				
-						
-						if (0&&trans_ptr->strans && !trans_ptr->write) {
-							tape_new = Stack_pop(&empty_tapes_ghost);
-							if (!tape_new) tape_new = Tape_add(a0);				
-							Tape_ghost(tape_new, tape_ptr);
-						} else {
-							tape_new = Stack_pop(&empty_tapes);
-							if (!tape_new) tape_new = Tape_add(a0);				
-							Tape_copy(tape_new, tape_ptr);
-						}
-						
-						if (trans_ptr->write) Tape_write(tape_new, &trans_ptr->writesym);
-						Tape_pos(tape_new, trans_ptr->dir);
-					} /*else {
-						//Tape_ghost(tape_new, tape_ptr);
-						Tape_pos(tape_ptr, 2);
-					}*/
-
-					if (trans_ptr->epsilon_loop) {
-
-						if (!trans_ptr->dstate->reject) {
-							if (is_tm) {
-								Stack_push(&next_states, &trans_ptr->dstate);
-								Stack_push(&next_tapes, &tape_new);
-								if (is_pda) {
-									Stack_push(&next_stacks, &stack_new);
-								}
-							} else {
-								Stack_push(&next_states, &trans_ptr->dstate);
-								//Stack_push(&next_tapes, &tape_new);
-								Stack_push(&next_heads, &tape_new->head);
-								if (is_pda) {
-									Stack_push(&next_stacks, &stack_new);
-								}
-								if (tape_new->head >= tapesize) loop_halt = 1;
-							}
-						}
-
-						if (flag_verbose) {
-							Trans_print(trans_ptr);
-							putchar('\n');
-							newlines++;
-							printf("%*s tape:  ", longest_name, trans_ptr->dstate->name);
-							Tape_print(tape_new);
-							putchar('\n');
-							newlines++;
-							if (is_pda) {
-								printf("%*s stack: ", longest_name, trans_ptr->dstate->name);
-								Stack_print(stack_new);
-								putchar('\n');
-								newlines++;
-							}
-						}
-
-					} else if (!trans_ptr->dstate->reject) {
-
-						Stack_push(&current_states, &trans_ptr->dstate);
-						if (is_tm) Stack_push(&current_tapes, &tape_new);
-						else Stack_push(&current_heads, &tape_new->head);
-
-						if (is_pda) {
-							Stack_push(&current_stacks, &stack_new);
-						}
-
-						if (flag_verbose) {
-							Trans_print(trans_ptr);
-							putchar('\n');
-							newlines++;
-							printf("%*s tape:  ", longest_name, trans_ptr->dstate->name);
-							Tape_print(tape_new);
-							putchar('\n');
-							newlines++;
-							if (is_pda) {
-								printf("%*s stack: ", longest_name, trans_ptr->dstate->name);
-								Stack_print(stack_new);
-								putchar('\n');
-								newlines++;
-							}
-						}
-					}
-
-				}
-
-				if (trans_ptr->strans) 
-					trans_ptr = Trans_get(a0, state_ptr, CELL_MAX, &offset, 1);
-				else 
-					break;
-			}
-		} 
-
-		if (is_tm) {
-			/*if (tape_ptr->ghost) Stack_push(&empty_tapes_ghost, &tape_ptr);
-			else*/ Stack_push(&empty_tapes, &tape_ptr);
-			Tape_clear(tape_ptr);
-		}
-
-		if (is_pda) {
-			Stack_clear(stack_ptr);
-			Stack_push(&empty_stacks, &stack_ptr);
-		}
-
-		if (flag_verbose && newlines) {
-			if (debug >= 2) {
-				printf("current_states.size: %u\n", current_states.size);
-				printf("current_tapes.size: %u\n", current_tapes.size);
-				if (is_pda) { 
-					printf("current_stacks.size: %u\n", current_stacks.size);
-					newlines++;
-				}
-				printf("empty_tapes.size: %u\n", empty_tapes.size);
-				if (is_pda) { 
-					printf("empty_stacks.size: %u\n", empty_stacks.size);
-					newlines++;
-				}
-				printf("a0->tapes.size: %u\n", a0->tapes.size);
-				printf("a0->stacks.size: %u\n", a0->stacks.size);
-				newlines+=5;
-			}
-
-			if (delay) nanosleep(&req, &rem);
-
-			if (!verbose_inline) printf("-----------\n");
-			else {
-				//if (!is_tm && !(loop_halt || !sym_trans))
-				clear_n(newlines);
-			}
-			newlines = 0;
-		} else if (newlines && delay) nanosleep(&req, &rem);
-
-
-		if (!current_states.size && next_states.size) {
-			
-			if (!is_tm) {
-				/*int halt = 0;
-				for (unsigned int i = 0; i < next_heads.size; i++) {
-					ptrdiff_t headtmp = Stack_ptrdifft_get(&next_heads, i);
-					if (headtmp >= tapesize) {
-						halt = 1;
-						break;
-					}
-				}*/
-				if (loop_halt || !sym_trans) {
-					state_ptr = NULL;
-					break;
-				}
-				loop_halt = 0;
-				sym_trans = 0;
-			}
-
-
-			/*if (!is_tm) {
-				if (max_head_prev >= max_head) {
-					state_ptr = NULL;
-					break;
-				}
-				max_head_prev = max_head;
-			 }*/
-
-			/*struct State *state_tmp = Stack_Stateptr_pop(&next_states);
-			  struct Tape *tape_tmp = Stack_Tapeptr_pop(&next_tapes);
-			  struct Stack *stack_tmp = Stack_Stackptr_pop(&next_stacks);
-
-			  while (state_tmp) {
-			  Stack_push(&current_states, &state_tmp);
-			  Stack_push(&current_tapes, &tape_tmp);
-
-			  if (0&&flag_verbose) {
-			  printf("%s tape:  ", state_tmp->name);
-			  Tape_print(tape_tmp);
-			  putchar('\n');
-			  newlines++;
-			  }
-
-			  if (is_pda) {
-			  if (0&&flag_verbose) {
-			  printf("%s stack: ", state_tmp->name);
-			  Stack_print(stack_tmp);
-			  putchar('\n');
-			  newlines++;
-			  }
-
-			  Stack_push(&current_stacks, &stack_tmp);
-			  stack_tmp = Stack_Stackptr_pop(&next_stacks);
-			  }
-
-			  state_tmp = Stack_Stateptr_pop(&next_states);
-			  tape_tmp = Stack_Tapeptr_pop(&next_tapes);
-			  }
-
-			  if (delay) nanosleep(&req, &rem);
-			  if (flag_verbose && !verbose_inline) printf("-----------\n");
-			  else {
-			  clear_n(newlines);
-			  }
-			  newlines = 0;*/
-
-			if (flag_verbose > 1) {
-				int max_rows = 20;
-				int num_pages = ((next_states.size * ((is_pda) ? 2 : 1)) / max_rows);
-				num_pages = (((next_states.size + num_pages) * ((is_pda) ? 2 : 1)) / max_rows)
-					+ ((((next_states.size + num_pages) * ((is_pda) ? 2 : 1)) % max_rows != 0));
-				int current_page = 1;
-
-				if (verbose_inline)
-					printf("epsilon cycles (1/%u):\n", num_pages);
-				else
-					printf("epsilon cycles:\n");
-
-				newlines++;
-
-				for (unsigned int i = 0; i < next_states.size; i++) {
-					struct State *s0 = Stack_get(&next_states, i);
-					//struct Tape *tp0 = Stack_Tapeptr_get(&next_tapes, i);
-					struct Tape *tp0 = NULL;
-					if (!is_tm) {
-						tp0 = tape_ptr;
-						tp0->head = *(ptrdiff_t *)Stack_get(&next_heads, i);
-					} else {
-						tp0 = Stack_get(&next_tapes, i);
-					}
-					
-					printf("%s tape:  ", s0->name); Tape_print(tp0); putchar('\n');
-					newlines++;
-					if (is_pda) {
-						struct Stack *stk0 = Stack_get(&next_stacks, i);
-						printf("%s stack: ", s0->name); Stack_print(stk0); putchar('\n');
-						newlines++;
-					}
-					if (verbose_inline && newlines >= max_rows) {
-						if (delay) nanosleep(&req, &rem);
-						//sleep(1);
-						clear_n(newlines);
-						printf("epsilon cycles (%u/%u):\n", ++current_page, num_pages);
-						newlines = 1;
-					}
-				}
-
-				if (delay) nanosleep(&req, &rem);
-
-				if (verbose_inline) {
-					clear_n(newlines);
-				} else {
-					printf("-----------\n");
-				}
-				newlines = 0;
-			}
-
-			struct Stack swap = current_states;
-			current_states = next_states;
-			next_states = swap;
-
-			if (is_tm) {
-				swap = current_tapes;
-				current_tapes = next_tapes;
-				next_tapes = swap;
-			} else {
-				swap = current_heads;
-				current_heads = next_heads;
-				next_heads = swap;
-			}
-
-			if (is_pda) {
-				swap = current_stacks;
-				current_stacks = next_stacks;
-				next_stacks = swap;
-			}
-		}
-
-			steps++;
-			state_ptr = NULL;
-		}
-
-		run_memory += 
-			Stack_free(&current_states) +
-			Stack_free(&current_tapes) +
-			
-			Stack_free(&next_states) +
-			Stack_free(&next_tapes) +
-
-			Stack_free(&current_heads) +
-			Stack_free(&next_heads) +
-
-			Stack_free(&empty_tapes) +
-			Stack_free(&empty_tapes_ghost);
-
-		if (is_pda) {
-			run_memory += 
-				Stack_free(&current_stacks) +
-				Stack_free(&next_stacks) +
-				Stack_free(&empty_stacks);
-			//Stack_free(&first_stack);
-		}
-
-		printf("STEPS: %zu\n", steps);
-		if (state_ptr && state_ptr->final) return 1;
-	return 0;
-
-}
-
+// ==========================
+// NONDETERMINISTIC ENGINES
+// ==========================
+// 
+//
+
+// Simulates nondeterministic Turing machine
+//
+// > Rather than dealing with a single state and tape
+//   at a time, this function uses runtime stacks to keep 
+//   track of nondeterminstic branches.
+// > Note: Only one branch need accept for the machine to
+//   accept, but EVERY branch must reject for the machine
+//   to reject.
+// > The current_* stacks do the heavy lifting, while
+//   the next_* stacks prevent 'epsilon loops' from
+//   sending the machine down a depth-first rabbit hole.
+// 
+// > A stack of empty tapes is also used to 'recycle'
+//   allocated tape objects as they reject or become unused
+//   throughout the nondeterministic branching.
+//
 int NTM_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct Stack current_states = Stack_init(STATEPTR);
@@ -806,6 +295,8 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of NTM_run()
+//
 int NTM_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -1039,6 +530,18 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Identical to NTM_run, except:
+//
+// > Performs checks on pop/push symbols
+// > Enforces stack top match for pop transition to 
+//   proceed to destination state
+// > Has additional runtime stack to keep track
+//   of nondeterminstic stack branches (stack of stacks o_0)
+// 
+// > Has an additional stack of empty stacks, for the same
+//   purpose of recycling rejected/unused stacks throughout
+//   the nondeterministic branching.
+//
 int NTM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct Stack current_states = Stack_init(STATEPTR);
@@ -1096,10 +599,10 @@ int NTM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym; // just need a non-null ptr here
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1124,8 +627,6 @@ int NTM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 						}
 					} else {
 						// reclaim rejected new stack/tape
-						//Tape_clear(tape_new);
-						//Stack_push(&empty_tapes, &tape_new);
 						Stack_clear(stack_new);
 						Stack_push(&empty_stacks, &stack_new);
 					}	
@@ -1151,10 +652,10 @@ int NTM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1184,8 +685,6 @@ int NTM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 						}
 					} else {
 						// reclaim rejected new stack/tape
-						//Tape_clear(tape_new);
-						//Stack_push(&empty_tapes, &tape_new);
 						Stack_clear(stack_new);
 						Stack_push(&empty_stacks, &stack_new);
 					}
@@ -1245,6 +744,8 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of NTM_stack_run()
+//
 int NTM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -1308,10 +809,10 @@ int NTM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1386,10 +887,10 @@ int NTM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1555,12 +1056,22 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Similar to NTM_stack_run(), except:
+//
+// > Rather than use a runtime stack of Tape copies,
+//   a runtime stack of tape head positions is used,
+//   because a PDA never changes the content of the tape.
+// > Tape direction is hard-coded to move right.
+// 
+// See the comments above the NFA_run() function below
+// for more information on how this function operates.
+//
 int PDA_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct Stack current_states = Stack_init(STATEPTR);
 	struct Stack next_states = Stack_init(STATEPTR);
-	struct Stack current_heads = Stack_init(PTRDIFFT);
-	struct Stack next_heads = Stack_init(PTRDIFFT);
+	struct Stack current_heads = Stack_init(HEAD);
+	struct Stack next_heads = Stack_init(HEAD);
 	struct Stack current_stacks = Stack_init(STACKPTR);
 	struct Stack next_stacks = Stack_init(STACKPTR);
 
@@ -1577,7 +1088,7 @@ int PDA_run(struct Automaton *a0, struct Tape *input_tape)
 	struct State *state_ptr = NULL;
 	struct Tape *tape_ptr = input_tape;
 	struct Stack *stack_ptr = NULL;
-	unsigned int head = 0;
+	HEAD_TYPE head = 0;
 
 	size_t steps = 0;
 	int run_cond = 0;
@@ -1615,10 +1126,10 @@ int PDA_run(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1665,10 +1176,10 @@ int PDA_run(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {	
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1745,6 +1256,8 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of PDA_run()
+//
 int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -1754,8 +1267,8 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 	struct Stack current_states = Stack_init(STATEPTR);
 	struct Stack next_states = Stack_init(STATEPTR);
-	struct Stack current_heads = Stack_init(PTRDIFFT);
-	struct Stack next_heads = Stack_init(PTRDIFFT);
+	struct Stack current_heads = Stack_init(HEAD);
+	struct Stack next_heads = Stack_init(HEAD);
 	struct Stack current_stacks = Stack_init(STACKPTR);
 	struct Stack next_stacks = Stack_init(STACKPTR);
 
@@ -1772,7 +1285,7 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 	struct State *state_ptr = NULL;
 	struct Tape *tape_ptr = input_tape;
 	struct Stack *stack_ptr = NULL;
-	unsigned int head = 0;
+	int head = 0;
 
 	int newlines = 0;
 	size_t steps = 0;
@@ -1784,7 +1297,7 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 			if (!current_states.size) {
 				state_ptr = NULL;
-				break;
+				goto run_end;
 			}
 
 			state_ptr = Stack_pop(&current_states);
@@ -1816,10 +1329,10 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1830,7 +1343,6 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 					}
 
 					if (pda) {
-
 						//Tape_pos(tape_ptr, 2);
 						tape_ptr->head++;
 
@@ -1888,10 +1400,10 @@ int PDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 					if (!stack_new) stack_new = Stack_add(a0, CELL);
 					Stack_copy(stack_new, stack_ptr);
 
-					CELL_TYPE *pda = &trans_ptr->popsym;
+					int pda = 1;
 					if (trans_ptr->pop) {
-						//if ((pda = Stack_cell_peek(stack_new) == trans_ptr->popsym)) {
-						if ((pda = Stack_peek(stack_new)) && *pda == trans_ptr->popsym) {
+						CELL_TYPE *peek = NULL;
+						if ((pda = (peek = Stack_peek(stack_new)) && *peek == trans_ptr->popsym)) {
 							Stack_pop(stack_new);
 							if (trans_ptr->push) {
 								Stack_push(stack_new, &trans_ptr->pushsym);
@@ -1998,12 +1510,38 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Simulates a nondeterministic finite automaton
+// 
+// Like PDA_run(), this uses a stack of head positions
+// rather than makes entire tape copies. However, 
+// this one is subtly different from the other nondeterministic
+// functions, in that it will only push unique destination
+// states to the current_* or next_* stack of states.
+//   
+//   --> This prevents an explosion of 'backtracking' that
+//       occurs in the PDA_run() function for a string that
+//       is ultimately rejected.
+//   
+//   --> Despite one branch reaching the end of the input string, 
+//       existing stacks and strings in the runtime stacks must be 
+//       confirmed to also reject. This is because PDA_run() does 
+//       not (yet) keep track of failed string prefixes, nor is it using
+//       a generative approach (ie. converting the PDA to a CFG)
+//       to more efficiently accept/reject the string; at the
+//       end of the day, I'm more interested inshowing the 
+//       *behavior* of the PDA than necessarily accepting/rejecting 
+//       the string most efficiently... for now.
+//
+//   --> So, in NFA_run(), this is backtracking on rejection is somewhat 
+//       mitigated by taking the 'state-set' approach to some degree by 
+//       only pushing unique states onto the runtime stacks.
+//
 int NFA_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct Stack current_states = Stack_init(STATEPTR);
 	struct Stack next_states = Stack_init(STATEPTR);
-	struct Stack current_heads = Stack_init(PTRDIFFT);
-	struct Stack next_heads = Stack_init(PTRDIFFT);
+	struct Stack current_heads = Stack_init(HEAD);
+	struct Stack next_heads = Stack_init(HEAD);
 
 	Stack_push(&current_states, &a0->start);
 	Stack_push(&current_heads, &input_tape->head);
@@ -2012,7 +1550,7 @@ int NFA_run(struct Automaton *a0, struct Tape *input_tape)
 
 	struct State *state_ptr = NULL;
 	struct Tape *tape_ptr = input_tape;
-	unsigned int head = 0;
+	HEAD_TYPE head = 0;
 
 	size_t steps = 0;
 	int run_cond = 0;
@@ -2023,7 +1561,7 @@ int NFA_run(struct Automaton *a0, struct Tape *input_tape)
 
 			if (!current_states.size) {
 				state_ptr = NULL;
-				break;
+				goto run_end;
 			}
 
 			state_ptr = Stack_pop(&current_states);
@@ -2033,7 +1571,6 @@ int NFA_run(struct Automaton *a0, struct Tape *input_tape)
 
 			if (state_ptr->final && !run_cond) {
 				goto run_end;
-				//break;
 			}
 
 			// For NFA,PDA: If tape end reached, only allow epsilon transitions
@@ -2114,6 +1651,8 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of NFA_run()
+//
 int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -2123,8 +1662,8 @@ int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 	struct Stack current_states = Stack_init(STATEPTR);
 	struct Stack next_states = Stack_init(STATEPTR);
-	struct Stack current_heads = Stack_init(PTRDIFFT);
-	struct Stack next_heads = Stack_init(PTRDIFFT);
+	struct Stack current_heads = Stack_init(HEAD);
+	struct Stack next_heads = Stack_init(HEAD);
 
 	Stack_push(&current_states, &a0->start);
 	Stack_push(&current_heads, &input_tape->head);
@@ -2133,7 +1672,7 @@ int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 	struct State *state_ptr = NULL;
 	struct Tape *tape_ptr = input_tape;
-	unsigned int head = 0;
+	HEAD_TYPE head = 0;
 
 	int newlines = 0;
 	size_t steps = 0;
@@ -2145,7 +1684,7 @@ int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 			if (!current_states.size) {
 				state_ptr = NULL;
-				break;
+				goto run_end;
 			}
 
 			state_ptr = Stack_pop(&current_states);
@@ -2155,7 +1694,6 @@ int NFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 
 			if (state_ptr->final && !run_cond) {
 				goto run_end;
-				//break;
 			}
 
 			if (verbose_inline) {
@@ -2284,6 +1822,14 @@ run_end:
 	return (state_ptr && state_ptr->final);
 }
 
+
+// ==========================
+// DETERMINISTIC ENGINES
+// ==========================
+
+
+// Simulates a deterministic Turing machine
+//
 int TM_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct State *state_ptr = a0->start;
@@ -2322,6 +1868,8 @@ int TM_run(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of TM_run()
+//
 int TM_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -2388,6 +1936,11 @@ int TM_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
+// Same as TM_run(), except:
+// > Includes pop/push symbol checks
+// > Enforces stack top match for pop transition to 
+//   proceed to destination state
+//
 int TM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct Stack stack = Stack_init(CELL);
@@ -2410,7 +1963,6 @@ int TM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 			if (trans_ptr->pop) {
 				CELL_TYPE *peek = Stack_peek(&stack);
 				if (peek && *peek == trans_ptr->popsym) {
-				//if (peek == trans_ptr->popsym) {
 					Stack_pop(&stack);
 					if (trans_ptr->push) {
 						Stack_push(&stack, &trans_ptr->pushsym);
@@ -2467,6 +2019,8 @@ int TM_stack_run(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of TM_stack_run()
+//
 int TM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -2515,7 +2069,7 @@ int TM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 						break;
 					}	
 				} else { 
-					Trans_print(trans_ptr);
+					Trans_print(trans_ptr); printf(" (pop fail)");
 					printf("\n   tape: ");
 					Tape_print(input_tape);
 					printf("\n  stack: ");
@@ -2596,6 +2150,222 @@ int TM_stack_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
+// Identical to TM_stack_run, except:
+// > no checks for tape-write symbols
+// > tape head only moves right
+//
+int DPDA_run(struct Automaton *a0, struct Tape *input_tape)
+{
+	struct Stack stack = Stack_init(CELL);
+	struct State *state_ptr = a0->start;
+
+	long int origsize = input_tape->tape.size;
+
+	CELL_TYPE input_sym = 0;
+	size_t steps = 0;
+
+	struct Trans *trans_ptr = NULL;
+	while (origsize--) {
+
+		input_sym = Tape_head(input_tape);
+		XXH64_hash_t offset = a0->trans.hashmax;
+		trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);		
+
+		if (trans_ptr) {	
+			// POP
+			if (trans_ptr->pop) {
+				CELL_TYPE *peek = Stack_peek(&stack);
+				if (peek && *peek == trans_ptr->popsym) {
+					Stack_pop(&stack);
+					if (trans_ptr->push) {
+						Stack_push(&stack, &trans_ptr->pushsym);
+					}
+
+					//Tape_pos(input_tape, 2);
+					input_tape->head++;
+
+					state_ptr = trans_ptr->dstate;
+					if (state_ptr->reject) {
+						state_ptr = NULL;
+						break;
+					}	
+				} else { 
+					state_ptr = NULL;
+					break;
+				}
+			// PUSH
+			} else if (trans_ptr->push) {
+				Stack_push(&stack, &trans_ptr->pushsym);
+				
+				//Tape_pos(input_tape, 2);
+				input_tape->head++;
+
+				state_ptr = trans_ptr->dstate;
+				if (state_ptr->reject) {
+					state_ptr = NULL;
+					break; 
+				}
+			// NO STACK OPS	
+			} else { 
+				//Tape_pos(input_tape, 2);
+				input_tape->head++;
+
+				state_ptr = trans_ptr->dstate;
+				if (state_ptr->reject) {
+					state_ptr = NULL;
+					break; 
+				}
+			}
+		// NO TRANS EXISTS
+		} else { 
+			state_ptr = NULL;
+			break;
+		}
+
+		steps++;
+	}
+
+	fprintf(stderr, "STEPS: %zu\n", steps);
+
+	run_memory += Stack_free(&stack);
+
+	return (state_ptr && state_ptr->final);
+}
+
+// Verbose version of DPDA_run()
+//
+int DPDA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
+{
+	struct timespec req, rem;
+	if (delay) {
+		req = nsleep_calc(delay);
+	}
+
+	struct Stack stack = Stack_init(CELL);
+	struct State *state_ptr = a0->start;
+
+	long int origsize = input_tape->tape.size;
+
+	CELL_TYPE input_sym = 0;
+	size_t steps = 0;
+
+	struct Trans *trans_ptr = NULL;
+	while (origsize--) {
+
+		input_sym = Tape_head(input_tape);
+		XXH64_hash_t offset = a0->trans.hashmax;
+		trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);		
+
+		if (trans_ptr) {	
+			// POP
+			if (trans_ptr->pop) {
+				CELL_TYPE *peek = Stack_peek(&stack);
+				if (peek && *peek == trans_ptr->popsym) {
+					Stack_pop(&stack);
+					if (trans_ptr->push) {
+						Stack_push(&stack, &trans_ptr->pushsym);
+					}
+
+					//Tape_pos(input_tape, 2);
+					input_tape->head++;
+
+					Trans_print(trans_ptr);
+					printf("\n   tape: ");
+					Tape_print(input_tape);
+					printf("\n  stack: ");
+					Stack_print(&stack);
+					putchar('\n');
+
+					state_ptr = trans_ptr->dstate;
+					if (state_ptr->reject) {
+						state_ptr = NULL;
+						break;
+					}	
+				} else { 
+					Trans_print(trans_ptr);
+					printf("\n   tape: ");
+					Tape_print(input_tape);
+					printf("\n  stack: ");
+					Stack_print(&stack);
+					putchar('\n');
+
+					state_ptr = NULL;
+					break;
+				}
+			// PUSH
+			} else if (trans_ptr->push) {
+
+				Stack_push(&stack, &trans_ptr->pushsym);
+				
+				//Tape_pos(input_tape, 2);
+				input_tape->head++;
+
+				Trans_print(trans_ptr);
+				printf("\n   tape: ");
+				Tape_print(input_tape);
+				printf("\n  stack: ");
+				Stack_print(&stack);
+				putchar('\n');
+
+				state_ptr = trans_ptr->dstate;
+				if (state_ptr->reject) {
+					state_ptr = NULL;
+					break; 
+				}
+			// NO STACK OPS	
+			} else { 
+				//Tape_pos(input_tape, 2);
+				input_tape->head++;
+
+				Trans_print(trans_ptr);
+				printf("\n   tape: ");
+				Tape_print(input_tape);
+				printf("\n  stack: ");
+				Stack_print(&stack);
+				putchar('\n');
+				
+				state_ptr = trans_ptr->dstate;
+				if (state_ptr->reject) {
+					state_ptr = NULL;
+					break; 
+				}
+			}
+		// NO TRANS EXISTS
+		} else { 
+			printf("%*s: ", longest_name, state_ptr->name);
+			Trans_sym_run_print(input_sym);
+			printf(" >\n   tape: ");
+			Tape_print(input_tape);
+			printf("\n  stack: ");
+			Stack_print(&stack);
+			putchar('\n');
+			
+			state_ptr = NULL;
+			break;
+		}
+
+		steps++;
+		
+		if (delay) nanosleep(&req, &rem);
+
+		if (verbose_inline) {
+			if (!state_ptr->final) clear_n(3);
+		} else {
+			printf("--------------\n");
+		}
+	}
+
+	if (verbose_inline || !state_ptr) printf("--------------\n");
+	
+	fprintf(stderr, "STEPS: %zu\n", steps);
+
+	run_memory += Stack_free(&stack);
+
+	return (state_ptr && state_ptr->final);
+}
+
+// Only checks for existing input symbol
+//
 int DFA_run(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct State *state_ptr = a0->start;
@@ -2635,6 +2405,8 @@ int DFA_run(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
+// Verbose version of DFA_run()
+//
 int DFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 {
 	struct timespec req, rem;
@@ -2698,642 +2470,3 @@ int DFA_run_verbose(struct Automaton *a0, struct Tape *input_tape)
 	return (state_ptr && state_ptr->final);
 }
 
-/*
-int TM_stack_run_verbose_poo(struct Automaton *a0, struct Tape *input_tape)
-{
-	struct timespec req, rem;
-	if (delay) {
-		req = nsleep_calc(delay);
-	}
-
-	// Nondeterministic machine flag
-	int nd = a0->epsilon + a0->strans;
-	//int nd = a0->strans;
-
-	// DEBUG: input tape contents
-	//for (size_t i = 0; i < input_tape.size; i++) {
-	//  printf("%td,", Stack_cell_get(&input_tape, i));
-	//}
-
-	//struct Stack current_states = Stack_init(STATEPTR);
-	//struct Stack next_states = Stack_init(STATEPTR);
-	//struct Stack tape_initial = Stack_init(TAPEPTR);
-	//struct Stack empty_tapes = Stack_init(TAPEPTR);
-
-	// For deterministic stack machines, empty_stacks will
-	// simply contain a single stack of cells, rather than
-	// a stack of empty stacks
-	struct Stack empty_stacks = (nd) ? Stack_init(STACKPTR) : Stack_init(CELL);
-
-	struct State *state_ptr = a0->start;
-
-	CELL_TYPE input_sym = 0;
-	size_t steps = 0;
-	int res = 0;
-	int newlines = 0;
-	size_t origsize = input_tape->tape.size;
-
-	struct Trans *trans_ptr = NULL;
-
-	while (!state_ptr->final) {
-
-		//if (state_ptr->final) break;
-
-		if (verbose_inline) {
-			clear_n(newlines);
-			newlines = 0;
-		}
-
-		input_sym = Tape_head(input_tape);
-
-		XXH64_hash_t offset = a0->trans.hashmax;
-		trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);		
-
-		if (trans_ptr) {	
-			if (is_pda) {
-				if (trans_ptr->pop) {
-					CELL_TYPE peek = Stack_cell_peek(&empty_stacks);
-					if (peek == trans_ptr->popsym) {
-						Stack_cell_pop(&empty_stacks);
-						if (trans_ptr->push) {
-							Stack_push(&empty_stacks, &trans_ptr->pushsym);
-						}
-
-						if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-						Tape_pos(input_tape, trans_ptr->dir);
-
-						if (!trans_ptr->dstate->reject) {
-							if (flag_verbose) {
-								Trans_print(trans_ptr); putchar('\n');
-								//printf("%s: ", state_ptr->name);
-								//Trans_sym_print(input_sym);
-								//printf(" > %s\n", trans_ptr->dstate->name);
-								newlines++;
-
-									printf("   tape: ");
-									Tape_print(input_tape);
-									putchar('\n');
-									newlines++;
-								
-								if (is_pda) {
-									printf("  stack: ");
-									Stack_print(&empty_stacks);
-									putchar('\n');
-									newlines++;
-								}
-							}
-							state_ptr = trans_ptr->dstate;
-						} else {
-							if (flag_verbose) {
-								Trans_print(trans_ptr); putchar('\n');
-								//printf("%s: ", state_ptr->name);
-								//Trans_sym_print(input_sym);
-								//printf(" > \n");
-								newlines++;
-
-									printf("   tape: ");
-									Tape_print(input_tape);
-									putchar('\n');
-									newlines++;
-								
-									if (is_pda) {
-									printf("  stack: ");
-									Stack_print(&empty_stacks);
-									putchar('\n');
-									newlines++;
-								}
-
-							}
-							state_ptr = NULL;
-							break;
-						}	
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							//printf("%s: ", state_ptr->name);
-							//Trans_sym_print(input_sym);
-							//printf(" > \n");
-							newlines++;
-
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = NULL;
-						break;
-					}
-				} else if (trans_ptr->push) {
-					Stack_push(&empty_stacks, &trans_ptr->pushsym);
-					if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-					Tape_pos(input_tape, trans_ptr->dir);
-
-					if (!trans_ptr->dstate->reject) {
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							//printf("%s: ", state_ptr->name);
-							//Trans_sym_print(input_sym);
-							//printf(" > %s\n", trans_ptr->dstate->name);
-							newlines++;
-
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = trans_ptr->dstate;
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							//printf("%s: ", state_ptr->name);
-							//Trans_sym_print(input_sym);
-							//printf(" > \n");
-							newlines++;
-
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = NULL;
-						break; 
-					}	
-				} else { 
-					if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-					Tape_pos(input_tape, trans_ptr->dir);
-					
-					if (!trans_ptr->dstate->reject) {
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							//printf("%s: ", state_ptr->name);
-							//Trans_sym_print(input_sym);
-							//printf(" > %s\n", trans_ptr->dstate->name);
-							newlines++;
-
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = trans_ptr->dstate;
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							//printf("%s: ", state_ptr->name);
-							//Trans_sym_print(input_sym);
-							//printf(" >\n");
-							newlines++;
-
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-						}
-						state_ptr = NULL;
-						break; 
-					}
-				}
-				// NOT PDA
-			} else {
-				if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-				Tape_pos(input_tape, trans_ptr->dir);
-
-				if (!trans_ptr->dstate->reject) {
-					if (flag_verbose) {
-						Trans_print(trans_ptr); putchar('\n');
-						//printf("%s: ", state_ptr->name);
-						//Trans_sym_print(input_sym);
-						//printf(" > %s\n", trans_ptr->dstate->name);
-						newlines++;
-
-							printf("   tape: ");
-							Tape_print(input_tape);
-							putchar('\n');
-							newlines++;
-						
-							if (is_pda) {
-							printf("  stack: ");
-							Stack_print(&empty_stacks);
-							putchar('\n');
-							newlines++;
-						}
-
-					}
-					state_ptr = trans_ptr->dstate;
-				} else { 
-					if (flag_verbose) {
-						Trans_print(trans_ptr); putchar('\n');
-						//printf("%s: ", state_ptr->name);
-						//Trans_sym_print(input_sym);
-						//printf(" >\n");
-						newlines++;
-
-							printf("   tape: ");
-							Tape_print(input_tape);
-							putchar('\n');
-							newlines++;
-						if (is_pda) {
-							printf("  stack: ");
-							Stack_print(&empty_stacks);
-							putchar('\n');
-							newlines++;
-						}
-					}
-					state_ptr = NULL;
-					break; 
-				}
-			}
-			// NO TRANS EXISTS
-		} else { 
-			if (flag_verbose) {
-				printf("%s: ", state_ptr->name);
-				Trans_sym_print(input_sym);
-				printf(" >\n");
-				newlines++;
-
-					printf("   tape: ");
-					Tape_print(input_tape);
-					putchar('\n');
-					newlines++;
-				if (is_pda) {
-					printf("  stack: ");
-					Stack_print(&empty_stacks);
-					putchar('\n');
-					newlines++;
-				}
-			}
-
-			state_ptr = NULL;
-			break;
-		}
-
-		if (flag_verbose && !verbose_inline) printf("--------------\n");
-		steps++;
-		if (delay) nanosleep(&req, &rem);
-
-	}
-
-	if (verbose_inline || (flag_verbose && !state_ptr)) printf("--------------\n");
-	if (state_ptr && state_ptr->final) res = 1;	
-	fprintf(stderr, "STEPS: %zu\n", steps);
-
-	return res;
-}
-*/
-
-// Generic automaton run function
-// Takes an automaton and an input string
-//
-// Returns int: 1 on accept, 0 on reject
-//int Automaton_run(struct Automaton *a0, char *input)
-int Automaton_run(struct Automaton *a0, struct Tape *input_tape)
-{
-	struct timespec req, rem;
-	if (delay) {
-		req = nsleep_calc(delay);
-	}
-
-	struct Stack empty_stacks = Stack_init(CELL);
-
-	struct State *state_ptr = a0->start;
-
-	CELL_TYPE input_sym = 0;
-	size_t steps = 0;
-	int res = 0;
-	int newlines = 0;
-	size_t origsize = input_tape->tape.size;
-	struct Trans *trans_ptr = NULL;
-
-	while (origsize-- || is_tm) {
-
-		if (is_tm && state_ptr->final) break;
-
-		if (verbose_inline) {
-			clear_n(newlines);
-			newlines = 0;
-		}
-
-		input_sym = Tape_head(input_tape);
-
-		XXH64_hash_t offset = a0->trans.hashmax;
-		trans_ptr = Trans_get(a0, state_ptr, input_sym, &offset, 0);		
-
-		if (trans_ptr) {	
-			if (is_pda) {
-				if (trans_ptr->pop) {
-					CELL_TYPE *peek = Stack_peek(&empty_stacks);
-					if (peek && *peek == trans_ptr->popsym) {
-						Stack_pop(&empty_stacks);
-						if (trans_ptr->push) {
-							Stack_push(&empty_stacks, &trans_ptr->pushsym);
-						}
-
-						if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-						if (is_tm) Tape_pos(input_tape, trans_ptr->dir);
-						else Tape_pos(input_tape, 2);
-
-						if (!trans_ptr->dstate->reject) {
-							if (flag_verbose) {
-								Trans_print(trans_ptr); putchar('\n');
-								/*printf("%s: ", state_ptr->name);
-								Trans_sym_print(input_sym);
-								printf(" > %s\n", trans_ptr->dstate->name);*/
-								newlines++;
-
-								if (is_tm) {
-									printf("   tape: ");
-									Tape_print(input_tape);
-									putchar('\n');
-									newlines++;
-								}
-								if (is_pda) {
-									printf("  stack: ");
-									Stack_print(&empty_stacks);
-									putchar('\n');
-									newlines++;
-								}
-							}
-							state_ptr = trans_ptr->dstate;
-						} else {
-							if (flag_verbose) {
-								Trans_print(trans_ptr); putchar('\n');
-								/*printf("%s: ", state_ptr->name);
-								Trans_sym_print(input_sym);
-								printf(" > \n");*/
-								newlines++;
-
-								if (is_tm) {
-									printf("   tape: ");
-									Tape_print(input_tape);
-									putchar('\n');
-									newlines++;
-								}
-								if (is_pda) {
-									printf("  stack: ");
-									Stack_print(&empty_stacks);
-									putchar('\n');
-									newlines++;
-								}
-
-							}
-							state_ptr = NULL;
-							break;
-						}	
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							/*printf("%s: ", state_ptr->name);
-							Trans_sym_print(input_sym);
-							printf(" > \n");*/
-							newlines++;
-
-							if (is_tm) {
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							}
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = NULL;
-						break;
-					}
-				} else if (trans_ptr->push) {
-					Stack_push(&empty_stacks, &trans_ptr->pushsym);
-					if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-					if (is_tm) Tape_pos(input_tape, trans_ptr->dir);
-					else Tape_pos(input_tape, 2);
-
-					if (!trans_ptr->dstate->reject) {
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							/*printf("%s: ", state_ptr->name);
-							Trans_sym_print(input_sym);
-							printf(" > %s\n", trans_ptr->dstate->name);*/
-							newlines++;
-
-							if (is_tm) {
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							}
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = trans_ptr->dstate;
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							/*printf("%s: ", state_ptr->name);
-							Trans_sym_print(input_sym);
-							printf(" > \n");*/
-							newlines++;
-
-							if (is_tm) {
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							}
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = NULL;
-						break; 
-					}	
-				} else { 
-					if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-					if (is_tm) Tape_pos(input_tape, trans_ptr->dir);
-					else Tape_pos(input_tape, 2);
-
-					if (!trans_ptr->dstate->reject) {
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							/*printf("%s: ", state_ptr->name);
-							Trans_sym_print(input_sym);
-							printf(" > %s\n", trans_ptr->dstate->name);*/
-							newlines++;
-
-							if (is_tm) {
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							}
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-
-						}
-						state_ptr = trans_ptr->dstate;
-					} else { 
-						if (flag_verbose) {
-							Trans_print(trans_ptr); putchar('\n');
-							/*printf("%s: ", state_ptr->name);
-							Trans_sym_print(input_sym);
-							printf(" >\n");*/
-							newlines++;
-
-							if (is_tm) {
-								printf("   tape: ");
-								Tape_print(input_tape);
-								putchar('\n');
-								newlines++;
-							}
-							if (is_pda) {
-								printf("  stack: ");
-								Stack_print(&empty_stacks);
-								putchar('\n');
-								newlines++;
-							}
-						}
-						state_ptr = NULL;
-						break; 
-					}
-				}
-				// NOT PDA
-			} else {
-				if (trans_ptr->write) Tape_write(input_tape, &trans_ptr->writesym);
-				if (is_tm) Tape_pos(input_tape, trans_ptr->dir);
-				else Tape_pos(input_tape, 2);
-
-				if (!trans_ptr->dstate->reject) {
-					if (flag_verbose) {
-						Trans_print(trans_ptr); putchar('\n');
-						/*printf("%s: ", state_ptr->name);
-						Trans_sym_print(input_sym);
-						printf(" > %s\n", trans_ptr->dstate->name);*/
-						newlines++;
-
-						if (is_tm) {
-							printf("   tape: ");
-							Tape_print(input_tape);
-							putchar('\n');
-							newlines++;
-						}
-						if (is_pda) {
-							printf("  stack: ");
-							Stack_print(&empty_stacks);
-							putchar('\n');
-							newlines++;
-						}
-
-					}
-					state_ptr = trans_ptr->dstate;
-				} else { 
-					if (flag_verbose) {
-						Trans_print(trans_ptr); putchar('\n');
-						/*printf("%s: ", state_ptr->name);
-						Trans_sym_print(input_sym);
-						printf(" >\n");*/
-						newlines++;
-
-						if (is_tm) {
-							printf("   tape: ");
-							Tape_print(input_tape);
-							putchar('\n');
-							newlines++;
-						}
-						if (is_pda) {
-							printf("  stack: ");
-							Stack_print(&empty_stacks);
-							putchar('\n');
-							newlines++;
-						}
-					}
-					state_ptr = NULL;
-					break; 
-				}
-			}
-			// NO TRANS EXISTS
-		} else { 
-			if (flag_verbose) {
-				printf("%s: ", state_ptr->name);
-				Trans_sym_print(input_sym);
-				printf(" >\n");
-				newlines++;
-
-				if (is_tm) {
-					printf("   tape: ");
-					Tape_print(input_tape);
-					putchar('\n');
-					newlines++;
-				}
-				if (is_pda) {
-					printf("  stack: ");
-					Stack_print(&empty_stacks);
-					putchar('\n');
-					newlines++;
-				}
-			}
-
-			state_ptr = NULL;
-			break;
-		}
-
-		if (flag_verbose && !verbose_inline) printf("--------------\n");
-		steps++;
-		if (delay) nanosleep(&req, &rem);
-
-	}
-
-	if (verbose_inline || (flag_verbose && !state_ptr)) printf("--------------\n");
-	if (state_ptr && state_ptr->final) res = 1;	
-	fprintf(stderr, "STEPS: %zu\n", steps);
-
-	return res;
-}

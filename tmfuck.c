@@ -75,12 +75,10 @@ int main(int argc, char **argv)
 		switch (opt)
 		{
 			case 'v':
-				//flag_verbose = 1;
 				flag_verbose++;
 				break;
 			case 'p':
 				verbose_inline = 1;
-				//flag_verbose = 1;
 				flag_verbose++;
 				break;
 			case 'x':
@@ -145,7 +143,6 @@ int main(int argc, char **argv)
 						}
 					}
 					delim_char = strtoll(delim_string, &endptr, 10);
-					//if (delim_char < 0 || delim_char > 127) {
 					if (!(delim_char > 32 && delim_char < 127) && !isspace(delim_char)) {
 						fprintf(stderr, "Error: input string/tape delimiter must be printable ASCII or whitespace.\n");
 						exit(EXIT_FAILURE);
@@ -185,8 +182,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	//printf("flag_verbose: %d\n", flag_verbose);
-
 	// if only one nonopt_index with regex assume it's the string
 	if (nonopt_index == 1 && regex) {
 		input_string = machine_file;
@@ -197,14 +192,12 @@ int main(int argc, char **argv)
 	if (!input_string && !input_string_file && !config_only) {
 		fprintf(stderr, "No input string supplied, assuming empty string\n");
 		input_tape = Tape_init();
-		//fprintf(stderr, "No input string supplied\n");
-		//exit(EXIT_FAILURE);
 	}
 
 	char buff[30];
 	print_max = (sign) ? 
-		snprintf(buff, 30, "%zd", (ptrdiff_t)CELL_MIN) :  // MIN has most chars w/ signed types (- sign)
-		snprintf(buff, 30, "%zu", (size_t)CELL_MAX);   // MAX has most chars w/ unsigned types
+		snprintf(buff, 30, "%" SIGNED_PRINT_FMT, (SIGNED_PRINT_TYPE)CELL_MIN) :
+		snprintf(buff, 30, "%" UNSIGNED_PRINT_FMT, (UNSIGNED_PRINT_TYPE)CELL_MAX);
 
 	//Automaton_print(a0);
 	struct Automaton a0;
@@ -213,14 +206,6 @@ int main(int argc, char **argv)
 		if (machine_file)
 			a0 = Automaton_import(machine_file);
 		else {
-			/*struct State state;
-			struct State *stateptr = &state;
-			char buff[20];
-			snprintf(buff, 20, "%u", UINT_MAX);
-			uint_len = strlen(buff);
-			snprintf(buff, 20, "%p", stateptr);
-			ptr_len = strlen(buff);*/
-
 			a0 = regex_to_nfa(regex);
 		}
 	} else if (machine_file) {
@@ -242,28 +227,26 @@ int main(int argc, char **argv)
 	// Detect and mark any epsilon cycles
 	int nd = a0.epsilon + a0.strans;
 	if (a0.epsilon) {
-		set_marks(&a0);
+		epsilon_loop_detect(&a0);
 		if (debug) {
 			int first = 1;
 			struct Stack *datastacks = a0.trans.data.elem;
-			//for (unsigned int i = 0; i < a0.trans.size; i++) {	
 			for (unsigned int i = 0; i < datastacks->size; i++) {	
 				struct Stack *strip = &datastacks[i];
 				struct Trans *strip_elem = strip->elem;
 				for (unsigned int j = 0; j < strip->size; j++) {
 
-					//struct Trans *trans = Block_addr(&a0.trans, i);
 					struct Trans *trans = &strip_elem[j];
 					if (trans->epsilon_loop) {
 						if (first) {
-							printf("Epsilon Loops:\n");
+							//printf("Epsilon Loops:\n");
 							first = 0;
 						}
-						Trans_print(trans); putchar('\n');
+						//Trans_print(trans); putchar('\n');
 					}
 				}
 			}
-			if (!first) printf("--------------\n");
+			//if (!first) printf("--------------\n");
 		}
 	}
 
@@ -273,37 +256,21 @@ int main(int argc, char **argv)
 	if (config_only) {
 		if (config_only > 1) Automaton_print(&a0, 1);
 		else Automaton_print(&a0, 0);
-		//Automaton_free(&a0);
 		if (!input_string && !input_string_file) { 
 			Automaton_free(&a0);
 			return 0;
 		}
 	}
 
-	//struct Tape input_tape;
 	begin = clock();
 	if (input_string) {
 		input_tape = Tape_import(&a0, input_string, 0);
 	} else if (input_string_file) {
 		input_tape = Tape_import(&a0, input_string_file, 1);
-		//input_tape = Tape_import_file(input_string_file);
 	}
 	end = clock();
 	double tape_import_time = (double)(end - begin) / CLOCKS_PER_SEC;
 
-	/*for (unsigned int i = 0; i < input_tape.tape.size; i++) {
-		CELL_TYPE c = *(CELL_TYPE *)Stack_get(&input_tape.tape, i);
-		if (sign) 
-			printf("%02td: %d\n", (ptrdiff_t)c, num_places(c));
-		else
-			printf("%02zu: %d\n", (size_t)c, num_places(c));
-	}*/
-
-	// DEBUG:
-	//printf("INITIAL TAPE: "); Tape_print(&input_tape); putchar('\n');
-	//printf("INITIAL TAPE SIZE: %u\n", input_tape.tape.size);
-
-	//printf("nd bit: %d\n", a0.epsilon + a0.strans);
 	if (config_only) printf("--------------\n");
 	
 	int res = 0;
@@ -313,6 +280,8 @@ int main(int argc, char **argv)
 
 	// NONDETERMINISTIC FUNCTIONS
 	if (nd_engine || nd) {
+	
+		// Turing machine
 		if (is_tm) {
 			if (is_pda) {
 				if (nd) machine_type = "NTM with stack";
@@ -326,14 +295,17 @@ int main(int argc, char **argv)
 
 				if (flag_verbose) res = NTM_run_verbose(&a0, &input_tape);
 				else res = NTM_run(&a0, &input_tape);
-				//res = Automaton_run_nd(&a0, &input_tape);
 			}
+		
+		// PDA
 		} else if (is_pda) {
 			if (nd) machine_type = "PDA";
 			else machine_type = "DPDA";
 
 			if (flag_verbose) res = PDA_run_verbose(&a0, &input_tape);
 			else res = PDA_run(&a0, &input_tape);
+		
+		// NFA
 		} else {
 			if (nd) machine_type = "NFA";
 			else machine_type = "DFA";
@@ -341,36 +313,39 @@ int main(int argc, char **argv)
 			if (flag_verbose) res = NFA_run_verbose(&a0, &input_tape);
 			else res = NFA_run(&a0, &input_tape);
 		}
+	
 	// DETERMINISTIC FUNCTIONS
 	} else {
+		
+		// Turing machine
 		if (is_tm) {
 			if (is_pda) {
 				machine_type = "TM with stack";
-				
 				if (flag_verbose) res = TM_stack_run_verbose(&a0, &input_tape);
 				else res = TM_stack_run(&a0, &input_tape);
 			} else {
 				machine_type = "TM";
-				
 				if (flag_verbose) res = TM_run_verbose(&a0, &input_tape);
 				else res = TM_run(&a0, &input_tape);
 			}
+	
+		// DPDA
 		} else if (is_pda) {
 			machine_type = "DPDA";
-			
+			if (flag_verbose) res = DPDA_run_verbose(&a0, &input_tape);
+			else res = DPDA_run(&a0, &input_tape);
+		
+		// DFA
 		} else {
 			machine_type = "DFA";
-			
 			if (flag_verbose) res = DFA_run_verbose(&a0, &input_tape);
 			else res = DFA_run(&a0, &input_tape);
 		}
-		//else res = Automaton_run(&a0, &input_tape);
 	}
 
 	end = clock();
 	double run_time = (double)(end - begin) / CLOCKS_PER_SEC;
 	fprintf(stderr, "%s\n", (res) ? "ACCEPTED" : "REJECTED");
-	//if (res) printf("ACCEPTED\n"); else printf("REJECTED\n");
 
 	double sec;
 	double msec = modf(run_time, &sec);
@@ -408,7 +383,6 @@ int main(int argc, char **argv)
 		int symlen = 0;
 		for (unsigned int i = 0; i < a0.delims.size; i++) {
 			CELL_TYPE d = *(CELL_TYPE *)Stack_get(&a0.delims, i);
-			//Trans_sym_conf_print(d);
 			if (symlen > 59) {
 				fprintf(stderr, "\n                        ");
 				symlen = 0;

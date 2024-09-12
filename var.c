@@ -7,27 +7,7 @@
 #include "stack.h"
 #include "block.h"
 
-// Creates variable from provided name
-// > syms contains the actual elements of the var
-// > edits contains modifications/reassignments
-//   of the variable
-//
-// Returns static var
-/*
-struct Var Var_init(char *name)
-{
-	struct Var var;
-	var.syms = Stack_init(CELL);
-	//var.edits = Stack_init(CHAR);
-	var.edits = Stack_init(CHARPTR);
-
-	//snprintf(var.name, sizeof(var.name), "%s", name);
-	var.name = Name_add(a0, name);
-	
-	return var;
-}
-*/
-// Get the variable
+// Retrieve variable from automaton's Var Block
 //
 // Returns pointer to variable or NULL if one with given name doesn't exist
 struct Var *Var_get(struct Automaton *a0, char *name)

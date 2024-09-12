@@ -44,6 +44,7 @@ enum StackType {
 	CHAR,
 	CELL,
 	PTRDIFFT,
+	HEAD,
 	STATEPTR,
 	VARPTR,
 	CHARPTR,

@@ -12,18 +12,10 @@
 
 struct Tape Tape_init()
 {
-/*	struct Tape tp0;
-	tp0.tape = Stack_init(CELL);
-	//tp0.tape = NULL;
-	//tp0.stack = Stack_init(CELL);
-	//tp0.stacks = NULL;
-	tp0.head = 0;
-	tp0.ghost = 0;*/
-
-	return Tape_init_size(0);
+	return Tape_init_max(0);
 }
 
-struct Tape Tape_init_size(size_t max)
+struct Tape Tape_init_max(size_t max)
 {
 	struct Tape tp0;
 	tp0.tape = Stack_init_max(CELL, max);
@@ -45,7 +37,6 @@ size_t Tape_free(struct Tape *tp0)
 {
 	if (tp0->ghost) return 0;
 	return Stack_free(&tp0->tape);
-	//Stack_free(&tp0->stack);
 }
 
 // Moves tape head left or right
@@ -54,75 +45,9 @@ size_t Tape_free(struct Tape *tp0)
 // 2: right
 //
 // Returns updated head position
-size_t Tape_pos(struct Tape *tp0, int dir)
+HEAD_TYPE Tape_pos(struct Tape *tp0, int dir)
 {
 	if (!dir) return tp0->head;
-
-	// If move is left of stack beginning, 
-	// add more memory and shift stack right
-	// > Initialize 'empty' elements left of
-	//   head to blank
-	//
-	// Decrement head counter
-	/*if (dir == 1) {
-		if (!tp0->head) {
-			if (tp0->ghost) {
-				struct Stack copy = Stack_init(CELL);
-				Stack_copy(&copy, &tp0->tape);
-				tp0->tape = copy;
-				tp0->ghost = 0;
-			}
-			//size_t oldmax = tp0->tape.max;
-			//tp0->head = oldmax; //tp0->tape.size;
-			tp0->head = tp0->tape.max;
-			//tp0->tape.size = tp0->tape.max;
-			//Stack_push(&tp0->tape, &tm_blank);
-			//Stack_cell_pop(stack);
-
-			tp0->tape.max *= 2;
-			CELL_TYPE *elem = realloc(tp0->tape.elem, tp0->tape.max * sizeof(CELL_TYPE));
-			if (elem == NULL) {
-				fprintf(stderr, "Error resizing tape stack on left move\n");
-				exit(EXIT_FAILURE);
-			}
-			tp0->tape.elem = elem;
-
-			//tp0->tape.size = tp0->tape.size + tp0->head-1;
-			tp0->tape.size += tp0->head;
-			
-			memmove(tp0->tape.elem + tp0->head * sizeof(CELL_TYPE), tp0->tape.elem, tp0->head * sizeof(CELL_TYPE));
-			CELL_TYPE *tmpelem = tp0->tape.elem;
-			for (size_t i = 0; i < tp0->head; i++) tmpelem[i] = tm_blank;
-			for (size_t i = tp0->tape.size; i < tp0->tape.max; i++) tmpelem[i] = tm_blank;
-		}
-		tp0->head--;
-
-	// If move is right of tape (stack) size,
-	// push blank symbol, then initialize 
-	// empty elements right of tape head
-	// to blank symbol
-	//
-	// Increment head counter
-	} else if (dir == 2) {
-		if (tp0->head >= tp0->tape.size-1) {
-			if (tp0->ghost) {
-				struct Stack copy = Stack_init(CELL);
-				Stack_copy(&copy, &tp0->tape);
-				tp0->tape = copy;
-				tp0->ghost = 0;
-			}
-			size_t oldmax = tp0->tape.max;
-			Stack_push(&tp0->tape, &tm_blank);
-			if (tp0->tape.max != oldmax) {
-				CELL_TYPE *tmpelem = tp0->tape.elem;
-				for (size_t i = tp0->tape.size; i < tp0->tape.max; i++) tmpelem[i] = tm_blank; 
-			}
-		}
-		tp0->head++;	
-	}*/
-	
-	// DEBUG:
-	//printf("head: %zu, size: %u, max: %u\n", tp0->head, tp0->tape.size, tp0->tape.max);
 
 	if (dir == 1)
 		return --tp0->head;
@@ -146,30 +71,16 @@ int Tape_write(struct Tape *tp0, CELL_TYPE *sym)
 		Stack_push(&tp0->tape, sym);
 		return 0;
 	}
-	//else {
-	//CELL_TYPE *tmpelem = tp0->tape.elem;
-	//tmpelem[tp0->head] = *(CELL_TYPE *)sym;
-	//}
 
 	CELL_TYPE tmpsym = *(CELL_TYPE *)sym;
 	CELL_TYPE *tmpelem = tp0->tape.elem;
 	
-	//if (tp0->head >= 0 && tp0->head < (long int)tp0->tape.size) {
-	//	CELL_TYPE *tmpelem = tp0->tape.elem;
-	//	tmpelem[tp0->head] = *(CELL_TYPE *)sym;
-	//	return 0;
-	//}
-
 	if (tp0->head < 0) {
 		if (tmpsym == tm_blank) return 0;
 
-	//	long int newmax = tp0->tape.max;
-	//	while(tp0->tape.size - tp0->head >= newmax) newmax *= STACK_MULTIPLIER;
-	//	tp0->tape.max = newmax;
-
 		int resize = 0;
 		while(tp0->tape.size - tp0->head >= tp0->tape.max) {
-			//tp0->tape.max *= STACK_MULTIPLIER;
+			// See stack.h for more details
 			tp0->tape.max STACK_GROWTH_FUNC;
 			resize = 1;
 		}
@@ -192,38 +103,7 @@ int Tape_write(struct Tape *tp0, CELL_TYPE *sym)
 		
 		tp0->tape.size += offset;
 		tp0->head = 0;
-		
-		//tmpelem = tp0->tape.elem;
-
-		// reverse tape
-		/*int j = 0;
-		CELL_TYPE tmp = 0;
-		for (int i = tp0->tape.size-1; i > j; i--) {
-			//if (j == i) continue;
-			tmp = tmpelem[i];
-			tmpelem[i] = tmpelem[j];
-			tmpelem[j] = tmp;
-			j++;
-		}
-		tp0->tape.elem = tmpelem;
-		
-		// push blanks
-		while(tp0->head++) {
-			Stack_push(&tp0->tape, &tm_blank);
-		}
-		tmpelem = tp0->tape.elem;
-		tp0->head = 0;
-	
-		// re-reverse tape
-		j = 0;
-		for (int i = tp0->tape.size-1; i > j; i--) {
-			tmp = tmpelem[i];
-			tmpelem[i] = tmpelem[j];
-			tmpelem[j] = tmp;
-			j++;
-		}
-		tp0->tape.elem = tmpelem;*/
-	
+			
 	} else if (tp0->head >= (long int)tp0->tape.size) {
 		if (tmpsym == tm_blank) return 0;
 
@@ -241,19 +121,12 @@ int Tape_write(struct Tape *tp0, CELL_TYPE *sym)
 				exit(EXIT_FAILURE);
 			}
 			tmpelem = tp0->tape.elem = newelem;
-			//tmpelem = tp0->tape.elem;
 		}
 
 		memset(tp0->tape.elem + tp0->tape.size, 
 				tm_blank, 
 				(tp0->head - tp0->tape.size) * sizeof(CELL_TYPE));	
 		tp0->tape.size = tp0->head + 1;
-
-		// push blanks
-	/*	while(tp0->head >= (long int)tp0->tape.size) {
-			Stack_push(&tp0->tape, &tm_blank);
-		}
-		tmpelem = tp0->tape.elem;*/
 	} 
 
 	tmpelem[tp0->head] = tmpsym;
@@ -396,8 +269,6 @@ void Tape_print(struct Tape *tp0)
 			else fmt = "%c";
 			prev_dec = 0;
 		} else {
-			//if (i != left_begin) fmt = "|%02td";
-			//else fmt = "%02td";
 			if (i != left_begin) 
 				fmt = (sign) ? "|%02" SIGNED_PRINT_FMT : "|%02" UNSIGNED_PRINT_FMT;
 			else 
@@ -443,7 +314,6 @@ void Tape_print(struct Tape *tp0)
 	char buff_right[buff_len];
 	buff_right[0] = '\0';
 	unsigned int num_chars_right = 0;
-	//prev_dec = 0;
 	for (int i = right_begin; i <= right_end; i++) {
 		cell = Stack_get(&tp0->tape, i);
 		sym = (cell) ? *cell : tm_blank;
@@ -453,8 +323,6 @@ void Tape_print(struct Tape *tp0)
 			else fmt = "%c";
 			prev_dec = 0;
 		} else {
-			//if (i != right_begin) fmt = "|%02td";
-			//else fmt = "%02td";
 			if (i != right_begin || !prev_dec) 
 				fmt = (sign) ? "|%02" SIGNED_PRINT_FMT : "|%02" UNSIGNED_PRINT_FMT;
 			else 
@@ -590,7 +458,7 @@ int isdelim(struct Stack *delims, CELL_TYPE sym)
 // Returns struct Tape
 struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 {	
-	struct Tape input_tape = Tape_init_size(initial_tape_size);
+	struct Tape input_tape = Tape_init_max(initial_tape_size);
 	
 	FILE *tape_file = NULL;
 	if (is_file) {

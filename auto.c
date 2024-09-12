@@ -14,10 +14,6 @@
 
 #include <limits.h>
 
-//CELL_TYPE CELL_MAX = (CELL_TYPE)PTRDIFF_MAX;
-//CELL_TYPE CELL_MAX = maxof(CELL_TYPE);
-//CELL_TYPE CELL_MIN = (issigned(CELL_TYPE)) ? -CELL_MAX-1 : 0;
-
 // Frees allocated memory of
 // all structures within Automaton
 size_t Automaton_free(struct Automaton *a0)
@@ -33,9 +29,6 @@ size_t Automaton_free(struct Automaton *a0)
 		+ Stack_free(&a0->rejects)
 		+ Stack_free(&a0->alphabet)
 		+ Stack_free(&a0->delims);
-
-//	Stack_free(&a0->symgroups);
-//	Stack_free(&a0->vargroups);
 }
 
 // Creates new automaton
@@ -60,9 +53,6 @@ struct Automaton Automaton_init()
 
 	a0.alphabet = Stack_init(CELL);
 	a0.delims = Stack_init(CELL);
-
-//	a0.symgroups = Stack_init(CELL);
-//	a0.vargroups = Stack_init(VARPTR);
 
 	a0.tm = 0;
 	a0.pda = 0;
@@ -346,8 +336,6 @@ struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State
 	newtrans->epsilon_mark = 0;
 	newtrans->strans = 0;
 	newtrans->exec = 0;
-	//newtrans->symgroup = 0;
-	//newtrans->vargroup = 0;
 
 	if (input_bit) {
 		pstate->syms = 1;

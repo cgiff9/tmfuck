@@ -1,0 +1,12 @@
+# Accepts strings of the form %0^n1^n%
+# > % on both ends
+# > n number of 0's, followed by n number of 1's in the middle
+# > for n >= 1
+#
+# ie. %01%, %000111%, etc.
+
+q0: % > q1(>%);
+q1: 0 > q1(>0); 1 > q2(0>);
+q2: 1 > q2(0>); % > q3(%>);
+
+final: q3;
