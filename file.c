@@ -827,11 +827,11 @@ struct Automaton Automaton_import(char *filename)
 							Stack_push(specacc, &charhead);
 							mystate = 501;
 						} else if (isspace(charhead)) {
-							tm_blank = *(CELL_TYPE *)Stack_pop(specacc);
+							tm_blank = *(char *)Stack_pop(specacc);
 							Stack_clear(specacc);
 							mystate = 502;
 						} else if (charhead == ';') {
-							tm_blank = *(CELL_TYPE *)Stack_pop(specacc);
+							tm_blank = *(char *)Stack_pop(specacc);
 							Stack_clear(specacc);
 							mystate = 3;
 						} else mystate = 8;

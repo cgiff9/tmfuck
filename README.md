@@ -168,7 +168,7 @@ A variable is simply a name followed by an '=', then followed comma-separated li
 ```
 ALPHABET = A, B, C, 1207, ';', D, E ;     # declaration
 FEWER = $ALPHABET \ D, E;                 # declaration, reference
-ELSESYMS = $ALPHABET \ $FEWER             # declaration, two references
+ELSESYMS = $ALPHABET \ $FEWER;            # declaration, two references
 q0: $ALPHABET,Z,Y > q1;                   # reference inside sym list
 q1: $FEWER > q2;                          # reference
 q2: $ELSESYMS > q2;                       # reference
