@@ -17,7 +17,7 @@ The name of this language is inspired by the venerable language [brainfuck](http
 + Code [comments](#comments)
 
 ### Example Machine
-This [example](../main/samples/busy-beaver/tm_bb4_107.tmf) Turing machine will execute the 4th Busy Beaver function:
+This [example](../main/samples/busy-beaver/tm_bb4_107.tmf) Turing machine will execute the 4-state Busy Beaver function:
 ```
 start: q0;
 final: qh;
@@ -132,7 +132,7 @@ In this case, on input symbol 'A', the machine pushes a 'B' to the stack, writes
 *NOTE: These three operations (tape write, tape direction, and stack pop/push) may be listed in any order between the parentheses, but each operation type may appear at most once.*
 
 #### Tape Properties
-The tape extends "infinitely" in both directions, and the default blank character is the '\_' underscore. This character may be changed to any type of symbol, including integers outside the printable ASCII range (see the [Directives](#directives) section below).
+The tape extends "infinitely" in both directions, and the default blank character is the '\_' underscore. This character may be changed to any type of symbol, including integers outside the printable ASCII range (see the [Directives](#machine-file-directives) section below).
 
 ## More Syntax
 
