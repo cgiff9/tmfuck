@@ -127,7 +127,7 @@ instructions, either:
 ```
 q0: A > q1 (7, L, >B);
 ```
-In this case, on input symbol 'A', the machine pushes a 'B' to the stack, writes a 'Z' to the tape, then moves the tape head left. The pop operation imposes the same transition conditions mentioned in the "PDA" section above.
+In this case, on input symbol 'A', the machine pushes a 'B' to the stack, writes a '7' to the tape, then moves the tape head left. The pop operation imposes the same transition conditions mentioned in the "PDA" section above.
 
 *NOTE: These three operations (tape write, tape direction, and stack pop/push) may be listed in any order between the parentheses, but each operation type may appear at most once.*
 
