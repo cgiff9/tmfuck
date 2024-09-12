@@ -144,7 +144,8 @@ q0: ';' > q1;
 #### Control Characters:
 All the characters that must be single-quoted (or have their integer equivalents used instead) are listed below:
 ```
-: > $ , ; ( ) ' \ # =
+ASCII character:  :  >  $  ,  ;  (  )  '  \  #  =
+ASCII decimal:    58 62 36 44 59 40 41 39 92 35 61
 ```
 State and variable names may consist of non-whitespace printable characters not listed above.
 
