@@ -15,6 +15,7 @@ The name of this language is inspired by the venerable language [brainfuck](http
 + Define and manipulate [lists](#symbol-lists) of transition symbols using [variables](#symbol-variables)
 + ASCII and [integer](#integer-symbols) cell symbols
 + Code [comments](#comments)
++ Brainfuck-like [cell operations](#extended-cell-operations) \[++, --, +=, -=, etc.\] *(coming soon)*
 
 ### Example Machine
 This [example](../main/samples/busy-beaver/tm_bb4_107.tmf) Turing machine will execute the 4-state Busy Beaver function:
@@ -325,4 +326,24 @@ q14: > q12,q15;
 Using the overloaded '-cc' parameter will output the machine file in a more readable format for machines with many transitions per state and large lists of symbols.
 
 *Note: The '-c' options do not preserve variables used in the original machine file. Instead, the individual input symbols of that variable are printed, which can significantly increase the verbosity of the output (see [spec_novar.tmf](../main/samples/spec_novars.tmf) ).*
+
+## Extended cell operations
+
+*Coming soon...?*
+
+The next step in development is to implement extended tape write operations in the spirit of Brainfuck. Brainfuck has cell increment (+) and cell decrement(-) [operations](https://esolangs.org/wiki/Brainfuck#Language_overview), and the hope is to implement these in tmfuck. Ideas include:
++ Simple increment, decrement: ++, --
++ Increment, decrement by constant: += n, -= n
++ Similar operations for multiplication, division, modulo?
+
+Sometimes when building a Turing machine, you only want to focus on a particular function to implement which may rest on the shoulders of functions that would require enormous effort to implement beforehand. These extensions could allow the programmer to make use of loops and counters as 'shortcuts' to reach a point where they can focus one particular function they want to actually implement in a true Turing-machine-like fashion.
+
+For instance, this is a way a counter could be implemented;
+```
+NOTYET5 = 00, 01, 02, 03, 04;
+q0: 00 > q1;
+q1: $NOTYET5 > q1(++); 05 > q2(R);
+q2: #* stuff to do after counting to 5 *#
+```
+This is just spitballing for now, the actual implementation could go some other way.
 

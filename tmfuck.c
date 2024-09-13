@@ -142,7 +142,11 @@ int main(int argc, char **argv)
 							exit(EXIT_FAILURE);
 						}
 					}
-					delim_char = strtoll(delim_string, &endptr, 10);
+					if (sign) 
+						delim_char = strtoimax(delim_string, &endptr, 10);
+					else
+						delim_char = strtoumax(delim_string, &endptr, 10);	
+
 					if (!(delim_char > 32 && delim_char < 127) && !isspace(delim_char)) {
 						fprintf(stderr, "Error: input string/tape delimiter must be printable ASCII or whitespace.\n");
 						exit(EXIT_FAILURE);
@@ -194,10 +198,12 @@ int main(int argc, char **argv)
 		input_tape = Tape_init();
 	}
 
-	char buff[30];
+/*	char buff[30];
 	print_max = (sign) ? 
 		snprintf(buff, 30, "%" SIGNED_PRINT_FMT, (SIGNED_PRINT_TYPE)CELL_MIN) :
-		snprintf(buff, 30, "%" UNSIGNED_PRINT_FMT, (UNSIGNED_PRINT_TYPE)CELL_MAX);
+		snprintf(buff, 30, "%" UNSIGNED_PRINT_FMT, (UNSIGNED_PRINT_TYPE)CELL_MAX);*/
+
+	print_max = num_places((sign) ? CELL_MIN : CELL_MAX);
 
 	//Automaton_print(a0);
 	struct Automaton a0;
@@ -550,6 +556,9 @@ int main(int argc, char **argv)
 				print_max, (print_max == 1) ? "char" : "chars");
 		fprintf(stderr, " Longest input symbol:      %d %s\n", 
 				longest_sym, (longest_sym == 1) ? "char" : "chars");
+		fprintf(stderr, " Longest state name:        %d %s\n", 
+				longest_name, (longest_name == 1) ? "char" : "chars");
+
 	}
 
 

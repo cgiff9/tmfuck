@@ -3,7 +3,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
-/*#include <inttypes.h>*/
 
 #include <limits.h>
 
@@ -60,20 +59,19 @@ int isnamechar(CELL_TYPE c)
 //
 // Returns number of characters in a 
 // printed symbol
-int num_places (CELL_TYPE n) 
+unsigned int num_places (CELL_TYPE n) 
 {
 	// Printable ASCII always has length 1
 	if (n > 31 && n < 127) return 1;
 	
-	int neg = 0;
+	unsigned int neg = 0;
 	if ((neg = (n < 0))) {
 		n = (n == CELL_MIN) ? CELL_MAX : -n;
-		//neg = 1;
 	}
 
 	CELL_TYPE tens = 10;
 	CELL_TYPE tens_prev = 0;
-	int num_chars = 1;
+	unsigned int num_chars = 1;
 	
 	while(tens_prev < tens) {
 		if (n < tens) return num_chars + neg;
@@ -173,7 +171,7 @@ struct Automaton Automaton_import(char *filename)
 	// > implicit cast of char accumulator stack's void *elem results in a valid C string
 	char nterm = '\0';
 
-	// Placeholder for transition integer symbols, endptr used for strtoll()/strtoull()
+	// Placeholder for transition integer symbols, endptr used for strtoimax()/strtoumax()
 	char *endptr;
 	CELL_TYPE intsym = 0;
 
@@ -221,10 +219,8 @@ struct Automaton Automaton_import(char *filename)
 
 				//DEBUG:
 				//printf("mystate: %3d | line: %4d | char: %3d | val: %c \n", mystate, linenum, i, line[i]);
-				//printf("longest_sym: %d\n", longest_sym);
-				//printf("mystate: %3d | line: %4d | char: %3d | j: %2d | k: %2d | val: %c \n", mystate, linenum, i, j, k, line[i]);
 
-				CELL_TYPE charhead = line[i];
+				char charhead = line[i];
 
 				switch (mystate) {
 					// Ensure state name is at least one char
@@ -275,7 +271,8 @@ struct Automaton Automaton_import(char *filename)
 						// May be signed/unsigned integer sym, process at mystate 81
 						if (isdigit(charhead) || charhead == '-') {
 							Stack_push(characc, &charhead);
-							Stack_push(symstack, &charhead);
+							symbol = charhead;
+							Stack_push(symstack, &symbol);
 							mystate = 80;
 						} else if (isnamechar(charhead)) {
 							Stack_push(characc, &charhead); // may be next state name
@@ -646,7 +643,8 @@ struct Automaton Automaton_import(char *filename)
 							mystate = 9;
 						} else if (isdigit(charhead) || charhead == '-') {
 							Stack_push(characc, &charhead);
-							Stack_push(symstack, &charhead);
+							symbol = charhead;
+							Stack_push(symstack, &symbol);
 							mystate = 80;
 						} else if (isnamechar(charhead)) {
 							symbol = charhead;
@@ -2747,12 +2745,14 @@ struct Automaton Automaton_import(char *filename)
 						if (isspace(charhead)) {
 							mystate = 400;
 						} else if (isdigit(charhead) || charhead == '-') {
-							Stack_push(minuend, &charhead);
+							symbol = charhead;
+							Stack_push(minuend, &symbol);
 							Stack_push(characc, &charhead);
 							Stack_push(specacc, &charhead);
 							mystate = 420;
 						} else if (isnamechar(charhead)) {
-							Stack_push(minuend, &charhead);
+							symbol = charhead;
+							Stack_push(minuend, &symbol);
 							Stack_push(characc, &charhead);
 							mystate = 401;
 						} else if (charhead == '$' ) {
@@ -2938,11 +2938,13 @@ struct Automaton Automaton_import(char *filename)
 						} else if (isdigit(charhead) || charhead == '-') {
 							Stack_push(characc, &charhead);
 							Stack_push(specacc, &charhead);
-							Stack_push(subtrahend, &charhead);
+							symbol = charhead;
+							Stack_push(subtrahend, &symbol);
 							mystate = 425;
 						} else if (isnamechar(charhead)) {
 							Stack_push(characc, &charhead);
-							Stack_push(subtrahend, &charhead);
+							symbol = charhead;
+							Stack_push(subtrahend, &symbol);
 							mystate = 414;
 						} else if (charhead == '#') {
 							comment_state = 405;
@@ -3098,7 +3100,8 @@ struct Automaton Automaton_import(char *filename)
 					// minuend: explict quoted char 'x'
 					case 410:
 						Stack_push(characc, &charhead);
-						Stack_push(minuend, &charhead);
+						symbol = charhead;
+						Stack_push(minuend, &symbol);
 						mystate = 411;
 						break;
 					case 411:
@@ -3110,7 +3113,8 @@ struct Automaton Automaton_import(char *filename)
 					// subtrahend: explict quoted char 'x'
 					case 412:
 						Stack_push(characc, &charhead);
-						Stack_push(subtrahend, &charhead);
+						symbol = charhead;
+						Stack_push(subtrahend, &symbol);
 						mystate = 413;
 						break;
 					case 413:

@@ -2,10 +2,15 @@
 #define FILE_H_
 
 #include "auto.h"
+#include "inttypes.h"
 
-#define SIGNED_IMPORT_FUNC  strtoll(special, &endptr, 10)
+/* #define SIGNED_IMPORT_FUNC  strtoll(special, &endptr, 10)
 #define UNSIGNED_IMPORT_FUNC  strtoull(special, &endptr, 10)
-#define DECIMAL_IMPORT_FUNC (issigned(CELL_TYPE)) ? (CELL_TYPE) SIGNED_IMPORT_FUNC : (CELL_TYPE) UNSIGNED_IMPORT_FUNC
+#define DECIMAL_IMPORT_FUNC (issigned(CELL_TYPE)) ? (CELL_TYPE) SIGNED_IMPORT_FUNC : (CELL_TYPE) UNSIGNED_IMPORT_FUNC */
+
+#define SIGNED_IMPORT_FUNC  strtoimax(special, &endptr, 10)
+#define UNSIGNED_IMPORT_FUNC  strtoumax(special, &endptr, 10)
+#define DECIMAL_IMPORT_FUNC (sign) ? (CELL_TYPE) SIGNED_IMPORT_FUNC : (CELL_TYPE) UNSIGNED_IMPORT_FUNC
 
 extern int flag_verbose;
 extern int verbose_inline;
@@ -34,7 +39,7 @@ void Trans_print(struct Trans *trans);
 void Automaton_print(struct Automaton *a0, int format);
 
 int isnamechar(CELL_TYPE c);
-int num_places (CELL_TYPE n);
+unsigned int num_places (CELL_TYPE n);
 int symcmp(const void *a, const void *b);
 
 #endif // FILE_H_

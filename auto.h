@@ -9,10 +9,6 @@
 #include "block.h"
 #include "stack.h"
 
-#define STR(x)   #x
-#define SHOW_DEFINE_FULL(x) fprintf(stderr, "%s = %s", #x, STR(x))
-#define SHOW_DEFINE_VALUE(x) fprintf(stderr, "%s", STR(x))
-
 /*===========================================*/
 //
 // CELL_TYPE MACRO (BE CAREFUL!)
@@ -105,12 +101,20 @@
 // unsigned mostly exists to ensure decimals
 // are printed accurately when CELL_TYPE is
 // set to the largest signed or unsigned 
-// datatype on your system. In my case,
-// these are ptrdiff_t (signed long long)
-// and size_t (unsigned long long);
+// datatype on your system. In the case
+// of C99, those are the types I've chosen
+// by default here.
 //
-// Best to leave these alone, really.
-
+// Defaults:
+//  SIGNED_PRINT_TYPE intmax_t
+//  UNSIGNED_PRINT_TYPE uintmax_t
+//  SIGNED_PRINT_FMT "jd"
+//  UNSIGNED_PRINT_FMT "ju"
+//
+// In the past, ptrdiff_t ("td") and 
+// size_t ("zu") have worked well for 
+// signed and unsigned, respectively.
+//
 
    #define SIGNED_PRINT_TYPE intmax_t
    #define UNSIGNED_PRINT_TYPE uintmax_t
@@ -133,38 +137,50 @@
 
 /*===========================================*/
 
-extern CELL_TYPE CELL_MAX;
-extern CELL_TYPE CELL_MIN;
-
-// Macros below modified from Glyph's answer
+// MACRO FUNCTIONS FOR DETERMINING MIN, MAX,
+// and SIGN of CELL_TYPE
+//
+// Modified from Glyph's answer
 // on StackOverflow: 
 //
-//   https://stackoverflow.com/a/7266266
+// https://stackoverflow.com/a/7266266
 //
-// Determines min and max values for the
-// CELL_TYPE datatype.
 
 
 /* #define issigned(t) (((t)(-1)) < ((t) 0)) */
-
-#define issigned(t) (!((t)0 - (t)1 > 0))
-
-#define umaxof(t) (((0x1ULL << ((sizeof(t) * 8ULL) - 1ULL)) - 1ULL) | \
-                    (0xFULL << ((sizeof(t) * 8ULL) - 4ULL)))
-
-#define smaxof(t) (((0x1ULL << ((sizeof(t) * 8ULL) - 1ULL)) - 1ULL) | \
-                    (0x7ULL << ((sizeof(t) * 8ULL) - 4ULL)))
-
-#define maxof(t) ((uintmax_t) (issigned(t) ? smaxof(t) : umaxof(t)))
-
 /* #define maxof(t) ((size_t) (issigned(t) ? smaxof(t) : umaxof(t))) */
 /* #define maxof(t) ((unsigned long long) (issigned(t) ? smaxof(t) : umaxof(t))) */
 
+#define issigned(t) (!((t)0 - (t)1 > 0))
+#define umaxof(t) (((0x1ULL << ((sizeof(t) * 8ULL) - 1ULL)) - 1ULL) | \
+                    (0xFULL << ((sizeof(t) * 8ULL) - 4ULL)))
+#define smaxof(t) (((0x1ULL << ((sizeof(t) * 8ULL) - 1ULL)) - 1ULL) | \
+                    (0x7ULL << ((sizeof(t) * 8ULL) - 4ULL)))
+#define maxof(t) ((uintmax_t) (issigned(t) ? smaxof(t) : umaxof(t)))
+
+/*===========================================*/
+
+// CELL_TYPE PRINT MACROS
+//
+// Used for '-z' paramter debug info output
+// in tmfuck.c
+//
+
+
+#define STR(x)   #x
+#define SHOW_DEFINE_FULL(x) fprintf(stderr, "%s = %s", #x, STR(x))
+#define SHOW_DEFINE_VALUE(x) fprintf(stderr, "%s", STR(x))
+
+/*===========================================*/
+
+
+extern CELL_TYPE CELL_MAX;
+extern CELL_TYPE CELL_MIN;
 
 struct State {
 	char *name;
 
-	// FLAGS:
+	// Flags
 	unsigned char start:1;
 	unsigned char final:1;
 	unsigned char reject:1;
@@ -178,31 +194,34 @@ struct Trans {
 	struct State *pstate;
 	struct State *dstate;
 	
-	CELL_TYPE inputsym;         // current symbol being read on input string/tape
+	CELL_TYPE inputsym;         // current symbol being read in input string/tape
 	CELL_TYPE popsym;           // symbol to match and pop from top of stack
 	CELL_TYPE pushsym;          // symbol to push to top of stack
 	CELL_TYPE writesym;         // symbol to write to TM tape
 
-   // FLAGS:	
-	unsigned char dir:2;        // tape head direction	
-                               // > 0 = stay, 1 = left, 2 = right
-	unsigned char reject:1;
-	unsigned char epsilon:1;       // this trans is an epsilon transition
-	unsigned char epsilon_loop:1;  // following this trans will complete an 'epsilon loop'
-	unsigned char epsilon_mark:2;
-	unsigned char pop:1;           // this trans has a stack pop operation
-	unsigned char push:1;          // this trans has a stack push operation
-	unsigned char write:1;         // this trans has a tape write operation
+   // Operation flags:
+	unsigned char dir:2;        // tape head direction (0=stay, 1=left, 2=right)	
+	unsigned char pop:1;        // trans has a stack pop operation
+	unsigned char push:1;       // trans has a stack push operation
+	unsigned char write:1;      // trans has a tape write operation
 
-	unsigned char strans:1;    // this trans shares an inputsym and pstate with another
-	unsigned char exec:1;      // this trans has a command associated 
+	// Other flags:
+	unsigned char epsilon:1;       // trans is an epsilon transition
+	unsigned char epsilon_loop:1;  // trans completes an 'epsilon loop'
+	unsigned char epsilon_mark:1;  // helper bit for finding e-loops
+	unsigned char strans:1;        // trans shares an inputsym and pstate with another
+	unsigned char exec:1;          // trans has a command associated 
 };
 
 
 struct Automaton {
+
+	// These 3 Blocks have hash tables:
 	struct Block states;
 	struct Block trans;
 	struct Block vars;
+	
+	// These 3 Blocks simply act as storage:
 	struct Block names;
 	struct Block stacks;
 	struct Block tapes;
@@ -214,9 +233,9 @@ struct Automaton {
 	struct Stack alphabet;
 	struct Stack delims;
 
+	// Flags
 	unsigned char tm:1;
 	unsigned char pda:1;
-	
 	unsigned char regex:1;
 	unsigned char epsilon:1;
 	unsigned char strans:1;

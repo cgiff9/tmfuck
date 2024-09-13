@@ -331,7 +331,6 @@ struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State
 	newtrans->dir = dir_tmp;
 
 	// Initialize other indicator bits
-	newtrans->reject = 0;
 	newtrans->epsilon_loop = 0;
 	newtrans->epsilon_mark = 0;
 	newtrans->strans = 0;
