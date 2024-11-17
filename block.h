@@ -102,6 +102,8 @@
 
 /*===========================================*/
 
+extern const size_t trans_hashbuff_bytes;
+
 enum BlockType {
 	STATE,
 	TRANS,

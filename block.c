@@ -12,6 +12,8 @@
 
 #include "file.h"
 
+const size_t trans_hashbuff_bytes = TRANS_HASHBUFF_LEN * sizeof(TRANS_HASHBUFF_TYPE);
+
 // The following two functions were pulled
 // from Howard Hinnant's answer on 
 // StackExchange. Much thanks for the C++
@@ -232,7 +234,7 @@ void Block_grow(struct Block *block)
 						(TRANS_HASHBUFF_TYPE) unhashed->inputsym,
 					};
 
-					XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+					XXH64_hash_t check = XXH3_64bits(hashbuff, trans_hashbuff_bytes) % block->hashmax;
 
 					XXH64_hash_t offset = check;
 					struct Trans *transcheck = hash_elem[offset];

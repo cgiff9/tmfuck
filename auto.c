@@ -205,7 +205,7 @@ struct Trans *Trans_get(struct Automaton *a0, struct State *pstate, CELL_TYPE in
 			(TRANS_HASHBUFF_TYPE) inputsym,
 		};
 
-		XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+		XXH64_hash_t check = XXH3_64bits(hashbuff, trans_hashbuff_bytes) % block->hashmax;
 		offset = check;
 	} else {
 		offset = *offset_prev;
@@ -259,7 +259,7 @@ struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State
 		(TRANS_HASHBUFF_TYPE) inputsym_tmp,
 	};
 
-	XXH64_hash_t check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+	XXH64_hash_t check = XXH3_64bits(hashbuff, trans_hashbuff_bytes) % block->hashmax;
 	XXH64_hash_t offset = check;
 	
 	unsigned char pop_bit, push_bit, write_bit = 0;
@@ -295,7 +295,7 @@ struct Trans *Trans_add(struct Automaton *a0, struct State *pstate, struct State
 		Block_grow(block);
 		hash_elem = block->hash.elem;
 
-		check = XXH3_64bits(hashbuff, TRANS_HASHBUFF_LEN) % block->hashmax;
+		check = XXH3_64bits(hashbuff, trans_hashbuff_bytes) % block->hashmax;
 		offset = check;
 		
 		transcheck = hash_elem[offset];
