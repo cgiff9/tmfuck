@@ -1,6 +1,8 @@
 
 # tmfuck
 
+![Sample](./extra/tmf_decAdd.tmf)
+
 A simple free-form interpreted language for building Turing machines and other automata.
 - [x] Finite automata (DFA, NFA)
 - [x] Pushdown automata (PDA, DPDA)
