@@ -46,13 +46,12 @@ make tmf
 ```
 If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can reconfigure the source files and download the necessary xxHash source files for you:
 ```
-./xxhash_conf.sh local
 ./xxhash_conf.sh download
-make localtmf
+make tmf
 ```
-Then you'll have a tmf binary compiled with the downloaded xxhash source files. If you wish to recompile using your system's installed xxHash library, you can reset the tmf source files and compile normally:
+Then you'll have a tmf binary compiled with the downloaded xxhash source files. If you wish to recompile using your system's installed xxHash library, you can move or remove the downloaded xxHash files and compile again:
 ```
-./xxhash_conf.sh system
+rm src/xxhash.*
 make tmf
 ```
 

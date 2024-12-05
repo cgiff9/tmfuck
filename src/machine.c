@@ -18,12 +18,10 @@ size_t run_memory = 0;
 
 void clear_n(int n)
 {
-	if (!n) return;
-	//while (n--) {
-		//printf("\r\033[K");
-		printf("\033[%dA\033[J", n);
-	//}
-	//printf("\r\033[K");
+	if (!n) { 
+		return;
+	}
+	printf("\033[%dA\033[J", n);
 }
 
 // Convert double in seconds into struct timespec for use with nanosleep()

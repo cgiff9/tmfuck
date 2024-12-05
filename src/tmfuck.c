@@ -4,7 +4,7 @@
 #include <limits.h>
 #include <getopt.h>
 #include <ctype.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include <time.h>
 #include <math.h>
@@ -59,6 +59,7 @@ int main(int argc, char **argv)
 	char *input_string = NULL;
 	char *regex = NULL;
 	char *delim_string = NULL;
+	CELL_TYPE delim_char = 0;
 
 	//int deterministic = 0;
 	//int minimize = 0;
@@ -106,7 +107,7 @@ int main(int argc, char **argv)
 				regex = optarg;
 				break;
 			case 'd':
-				CELL_TYPE delim_char = -1;
+				delim_char = -1;
 				delim_string = optarg;
 				if (!strcmp(delim_string, "whitespace") ||
 						!strcmp(delim_string, "white") ||
@@ -135,8 +136,7 @@ int main(int argc, char **argv)
 				} else if (delim_len < 4) { // longest ASCII char string: 126 (3 chars)
 					char *endptr;
 					int i = 0;
-					if (delim_string[0] == '-') i = 1;
-					for (i = i; i < delim_len; i++) {
+					for (i = (delim_string[0] == '-') ? 1 : 0; i < delim_len; i++) {
 						if (!isdigit(delim_string[i])) {
 							fprintf(stderr, "Error: input string/tape delimiter must be single ASCII char or a decimal value representing one.\n");
 							exit(EXIT_FAILURE);

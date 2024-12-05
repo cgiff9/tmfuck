@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "auto.h"
 #include "var.h"

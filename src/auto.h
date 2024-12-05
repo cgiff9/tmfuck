@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "block.h"
 #include "stack.h"

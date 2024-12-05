@@ -24,9 +24,7 @@ XXHASH_H=$XXHASH_H_0_8_2;
 
 PWD=$(pwd)
 DIR=$(basename $PWD)
-
-# All tmf source files listed here
-SRCFILES="${PWD}/auto.c ${PWD}/block.c ${PWD}/file.c ${PWD}/machine.c ${PWD}/regex.c ${PWD}/stack.c ${PWD}/tape.c ${PWD}/tmfuck.c ${PWD}/var.h ${PWD}/auto.h ${PWD}/block.h ${PWD}/file.h ${PWD}/machine.h ${PWD}/regex.h ${PWD}/stack.h ${PWD}/tape.h ${PWD}/var.c"
+SRCFILES=$(ls src/*.{c,h} | grep -v xxhash)
 
 if [ "$DIR" != "tmfuck" ] && [ "$DIR" != "tmf" ]; then
 	echo 'What are you doing running this outside the tmfuck source directory? Get in there!'
@@ -48,7 +46,7 @@ case $1 in
 		;;
 
 	"download")
-		rm -f ${PWD}/xxhash.c ${PWD}/xxhash.h
+		rm -f ${PWD}/src/xxhash.c ${PWD}/src/xxhash.h
 
 		if [ "$2" == "dev" ]; then
 			XXHASH_C=$XXHASH_C_DEV
@@ -62,8 +60,8 @@ case $1 in
 			echo "Downloading release v0.8.2 of xxhash.c and xxhash.h"
 		fi
 
-		wget $XXHASH_C
-		wget $XXHASH_H
+		wget -P src $XXHASH_C 
+		wget -P src $XXHASH_H
 		;;
 
 	*)

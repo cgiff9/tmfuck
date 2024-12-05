@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <xxhash.h>
+#include "xxhash.h"
 
 #include "var.h"
 #include "auto.h"

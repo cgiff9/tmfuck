@@ -170,6 +170,7 @@ struct Automaton Automaton_import(char *filename)
 	// Static null char for terminating char accumulators before comparing strings (var,state names)
 	// > implicit cast of char accumulator stack's void *elem results in a valid C string
 	char nterm = '\0';
+	char highlight = '\0';
 
 	// Placeholder for transition integer symbols, endptr used for strtoimax()/strtoumax()
 	char *endptr;
@@ -220,7 +221,7 @@ struct Automaton Automaton_import(char *filename)
 				//DEBUG:
 				//printf("mystate: %3d | line: %4d | char: %3d | val: %c \n", mystate, linenum, i, line[i]);
 
-				char charhead = line[i];
+				signed char charhead = line[i];
 
 				switch (mystate) {
 					// Ensure state name is at least one char
@@ -453,7 +454,7 @@ struct Automaton Automaton_import(char *filename)
 						break;
 					// PARSE ERROR (machine file reject)
 					case 8:
-						char highlight=line[linechar-2];
+						highlight=line[linechar-2];
 						if (highlight == '\n') highlight = ' ';
 						fprintf(stderr,"Error on or near line %u, char [%u]:\n%.*s[%c]%s", 
 							linenum, linechar -1, linechar-2, line, highlight, line+linechar-1);
