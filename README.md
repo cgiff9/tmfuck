@@ -1,7 +1,7 @@
 
 # tmfuck
 
-![<img src="./extra/tmf_decAdd.gif">](./samples/tm_decimalAdd.tmf)
+[<img src="extra/tmf_decAdd.gif">](./samples/tm_decimalAdd.tmf)
 
 A simple free-form interpreted language for building Turing machines and other automata.
 - [x] Finite automata (DFA, NFA)
