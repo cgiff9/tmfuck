@@ -1,7 +1,7 @@
 
 # tmfuck
 
-![Sample](./extra/tmf_decAdd.gif)
+![<img src="./extra/tmf_decAdd.gif">](./samples/tm_decimalAdd.tmf)
 
 A simple free-form interpreted language for building Turing machines and other automata.
 - [x] Finite automata (DFA, NFA)
@@ -44,7 +44,7 @@ git clone https://github.com/cgiff9/tmfuck
 cd tmfuck
 make tmf
 ```
-If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can reconfigure the source files and download the necessary xxHash source files for you:
+If your OS does not provide xxHash, or you wish not to use your OS's package, the provided script [xxhash_conf.sh](../main/xxhash_conf.sh) can download the necessary xxHash source files for you:
 ```
 ./xxhash_conf.sh download
 make tmf
