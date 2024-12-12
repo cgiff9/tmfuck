@@ -17,6 +17,7 @@ The name of this language is inspired by the venerable language [brainfuck](http
 + Define and manipulate [lists](#symbol-lists) of transition symbols using [variables](#symbol-variables)
 + ASCII and [integer](#integer-symbols) cell symbols
 + Code [comments](#comments)
++ Compile to intermediate C representation
 + Brainfuck-like [cell operations](#extended-cell-operations) \[++, --, +=, -=, etc.\] *(coming soon)*
 
 ### Example Machine
