@@ -17,7 +17,7 @@ The name of this language is inspired by the venerable language [brainfuck](http
 + Define and manipulate [lists](#symbol-lists) of transition symbols using [variables](#symbol-variables)
 + ASCII and [integer](#integer-symbols) cell symbols
 + Code [comments](#comments)
-+ Compile to intermediate C representation
++ Compile to intermediate [C representation](#compile-to-c)
 + Brainfuck-like [cell operations](#extended-cell-operations) \[++, --, +=, -=, etc.\] *(coming soon)*
 
 ### Example Machine
@@ -331,7 +331,7 @@ Using the overloaded '-cc' parameter will output the machine file in a more read
 *Note: The '-c' options do not preserve variables used in the original machine file. Instead, the individual input symbols of that variable are printed, which can significantly increase the verbosity of the output (see [spec_novar.tmf](../main/samples/spec_novars.tmf) ).*
 
 ## Compile to C
-Using the '-o' option, a tmf file can be compiled into an intermediate representation in C, where it can be furthered compiled into an binary executable program. This final executable will be hard-coded to perform the actions of your tmf file.
+Using the '-o' option, a tmf file can be compiled to an intermediate representation in C, where it can be further compiled to a binary executable program. This final executable will be hard-coded to perform the actions of your tmf file.
 ```
 ./tmf samples/tm_decimalAdd.tmf -o decAdd.c
 ```
@@ -355,7 +355,7 @@ You can also use the '-i' flag can accept a file as an argument.
 ```
 ./decAdd -i dec_input.txt
 ```
-When using the '-o' option of tmf, the resulting C file (thus compiled binary) will inherit any delimiters specified in the command line:
+When using the '-o' option, the resulting C file (thus compiled binary) will inherit any delimiters specified in the command line:
 ```
 ./tmf samples/decimalAdd.tmf -o decAdd.c -dws -d%
 ```
