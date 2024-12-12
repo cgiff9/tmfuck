@@ -78,6 +78,7 @@ The entire contents of the input file are considered one string/tape, including 
 -s <seconds>      sleep between verbose output steps (decimals allowed)
 -c                print machine file to console
 -cc               print machine file to console (neat)
+-o <file>         compile to intermediate C file
 -w <width>        maximum number of printed tape/stack characters
 -n                force use of the nondeterministic engine
 -r <regex>        regex string
@@ -327,6 +328,39 @@ q14: > q12,q15;
 Using the overloaded '-cc' parameter will output the machine file in a more readable format for machines with many transitions per state and large lists of symbols.
 
 *Note: The '-c' options do not preserve variables used in the original machine file. Instead, the individual input symbols of that variable are printed, which can significantly increase the verbosity of the output (see [spec_novar.tmf](../main/samples/spec_novars.tmf) ).*
+
+## Compile to C
+Using the '-o' option, a tmf file can be compiled into an intermediate representation in C, where it can be furthered compiled into an binary executable program. This final executable will be hard-coded to perform the actions of your tmf file.
+```
+./tmf samples/tm_decimalAdd.tmf -o decAdd.c
+```
+In the example above, the intermediate output file 'decAdd.c' can be further compiled into an executable by your choice of compiler. It is recommended to use the '-O2' compiler flag. If you are in the 'tmfuck' folder, calling *make* will automatically apply this flag.
+```
+make decAdd
+```
+You can also compile directly using gcc.
+```
+gcc decAdd.c -o decAdd -O2
+```
+Or use clang or some other compiler if you wish!
+```
+clang decAdd.c -o decAdd -O2
+```
+The resulting binary will accept an initial string/tape directly from the command line as its first argument: 
+```
+./decAdd 1234_1111
+```
+You can also use the '-i' flag can accept a file as an argument.
+```
+./decAdd -i dec_input.txt
+```
+When using the '-o' option of tmf, the resulting C file (thus compiled binary) will inherit any delimiters specified in the command line:
+```
+./tmf samples/decimalAdd.tmf -o decAdd.c -dws -d%
+```
+In the example above, when decAdd.c is compiled, the resulting binary will be hard-coded to interpret any whitespace and the '%' character as cell delimiter characters.
+
+*Note: Currently the '-o' option only works for deterministic machines. Nondeterministic support is coming soon!*
 
 ## Extended cell operations
 

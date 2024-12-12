@@ -483,6 +483,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 		char *endptr = NULL;
 		char *special = NULL;
 		char nterm = '\0';
+		int delim_flag = 0;
 		int mystate = 1;
 
 		while ((is_file && ((c = fgetc(tape_file)) != EOF)) || 
@@ -497,6 +498,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 
 						mystate = 4;
 					} else if (isdelim(delims, cell)) {
+						delim_flag = 1;
 						mystate = 2;
 					} else {
 						Stack_push(&input_tape.tape, &cell);
@@ -510,6 +512,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 
 						mystate = 4;
 					} else if (isdelim(delims, cell)) {
+						delim_flag = 1;
 						mystate = 2;
 					} else {
 						Stack_push(&input_tape.tape, &cell);
@@ -519,6 +522,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 					break;
 				case 3:
 					if (isdelim(delims, cell)) {
+						delim_flag = 1;
 						mystate = 2;
 					} else {
 						Stack_push(&input_tape.tape, &cell);
@@ -528,6 +532,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 					break;
 				case 4:
 					if (isdelim(delims, cell)) {
+						delim_flag = 1;
 						tmpc = *(char *)Stack_pop(&digitacc);
 						Stack_push(&input_tape.tape, &tmpc);
 
@@ -553,6 +558,7 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 
 						mystate = 5;
 					} else if (isdelim(delims, cell)) {
+						delim_flag = 1;
 						Stack_push(&digitacc, &nterm);
 						special = digitacc.elem;
 						tmpc = DECIMAL_IMPORT_FUNC;
@@ -578,10 +584,17 @@ struct Tape Tape_import(struct Automaton *a0, char *input_str, int is_file)
 			tmpc = *(char *)Stack_pop(&digitacc);
 			Stack_push(&input_tape.tape, &tmpc);
 		} else if (digitacc.size) {
-			Stack_push(&digitacc, &nterm);
-			special = digitacc.elem;
-			tmpc = DECIMAL_IMPORT_FUNC;
-			Stack_push(&input_tape.tape, &tmpc);
+			if (delim_flag) {
+				Stack_push(&digitacc, &nterm);
+				special = digitacc.elem;
+				tmpc = DECIMAL_IMPORT_FUNC;
+				Stack_push(&input_tape.tape, &tmpc);
+			} else {
+				for (unsigned int i = 0; i < digitacc.size; i++) {
+					tmpc = *(char *)Stack_get(&digitacc, i);
+					Stack_push(&input_tape.tape, &tmpc);
+				}
+			}
 		}
 
 		Stack_free(&digitacc);

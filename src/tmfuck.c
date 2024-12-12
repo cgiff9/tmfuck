@@ -15,6 +15,7 @@
 #include "machine.h"
 #include "regex.h"
 #include "tape.h"
+#include "compile.h"
 
 #include "block.h"
 #include "stack.h"
@@ -55,6 +56,7 @@ int main(int argc, char **argv)
 	CELL_MIN = (issigned(CELL_TYPE)) ? -CELL_MAX-1 : 0;
 
 	char *input_string_file = NULL;
+	char *output_c_file = NULL;
 	char *machine_file = NULL;
 	char *input_string = NULL;
 	char *regex = NULL;
@@ -71,7 +73,7 @@ int main(int argc, char **argv)
 
 	int opt;
 	int nonopt_index = 0;
-	while ((opt = getopt (argc, argv, "-:vpxcnzw:t:i:r:d:ms:")) != -1)
+	while ((opt = getopt (argc, argv, "-:vpxcnzw:t:i:o:r:d:ms:")) != -1)
 	{
 		switch (opt)
 		{
@@ -102,6 +104,9 @@ int main(int argc, char **argv)
 				break;
 			case 'i':
 				input_string_file = optarg;
+				break;
+			case 'o':
+				output_c_file = optarg;
 				break;
 			case 'r':
 				regex = optarg;
@@ -192,11 +197,11 @@ int main(int argc, char **argv)
 		machine_file = NULL;
 	}
 
-	struct Tape input_tape;
+	/*struct Tape input_tape;
 	if (!input_string && !input_string_file && !config_only) {
 		fprintf(stderr, "No input string supplied, assuming empty string\n");
 		input_tape = Tape_init();
-	}
+	}*/
 
 /*	char buff[30];
 	print_max = (sign) ? 
@@ -214,8 +219,15 @@ int main(int argc, char **argv)
 		else {
 			a0 = regex_to_nfa(regex);
 		}
-	} else if (machine_file) {
+	} else { //if (machine_file) {
 		a0 = Automaton_import(machine_file);
+	}
+
+	struct Tape input_tape;
+	if (!input_string && !input_string_file && !config_only) {
+		fprintf(stderr, "Warning: No input string supplied, assuming %s.\n",
+				(a0.tm) ? "blank tape" : "empty string");
+		input_tape = Tape_init();
 	}
 
 	// Consolidate and sort tape delimiters
@@ -262,7 +274,16 @@ int main(int argc, char **argv)
 	if (config_only) {
 		if (config_only > 1) Automaton_print(&a0, 1);
 		else Automaton_print(&a0, 0);
-		if (!input_string && !input_string_file) { 
+		if (!input_string && !input_string_file && !output_c_file) { 
+			Automaton_free(&a0);
+			return 0;
+		}
+	}
+
+	if (output_c_file) {
+		machine_to_c(&a0, output_c_file);
+		fprintf(stderr, "Converted %s to %s\n", machine_file, output_c_file);
+		if (!input_string && !input_string_file) {
 			Automaton_free(&a0);
 			return 0;
 		}

@@ -21,8 +21,8 @@ int execute = 0;
 CELL_TYPE tm_blank = '_';
 char tm_bound = '\0';
 int tm_bound_halt = 0;
-int is_tm = 0;
-int is_pda = 0;
+unsigned int is_tm = 0;
+unsigned int is_pda = 0;
 int sign = (issigned(CELL_TYPE));
 int print_max = 1;
 int debug = 0;
@@ -97,15 +97,32 @@ unsigned int num_places (CELL_TYPE n)
 // parse error.
 struct Automaton Automaton_import(char *filename) 
 {
+		
 	FILE *fp = NULL;
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
 
-	fp = fopen(filename, "r");
-	if (fp == NULL) { 
-		fprintf(stderr, "Error opening machine file %s\n", filename);
-		exit(EXIT_FAILURE);
+	if (filename) {	
+		size_t filename_len = strlen(filename);
+		int all_spaces = 0;
+		if (!filename_len) {
+			all_spaces = 1;
+		} else {
+			unsigned int i;
+			for (i = 0; i < filename_len && isspace(filename[i]); i++);
+			all_spaces = (i == filename_len);
+		}
+		
+		if (all_spaces) {
+			filename = NULL;
+		} else {
+			fp = fopen(filename, "r");
+			if (fp == NULL) { 
+				fprintf(stderr, "Error opening machine file %s\n", filename);
+				exit(EXIT_FAILURE);
+			}
+		}
 	}
 
 	// Transition symbols
@@ -207,6 +224,11 @@ struct Automaton Automaton_import(char *filename)
 
 	struct Automaton machine = Automaton_init();
 	struct Automaton *a0 = &machine;
+
+	if (!filename) {
+		fprintf(stderr, "Warning: No machine file specified, assuming empty language.\n");
+		goto empty_end;
+	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
 		                                      // These vars deprecated by Stack(CHAR) accumulators
@@ -3506,7 +3528,9 @@ struct Automaton Automaton_import(char *filename)
 	}
 			
 	free(line);
-	
+
+empty_end:
+
 	if (a0->start == NULL) {
 		// Add a state if none exist (empty language!)
 		if (a0->states.size == 0) State_add(a0, "q0");
@@ -3559,6 +3583,9 @@ struct Automaton Automaton_import(char *filename)
 	// Account for null term
 	longest_name--;
 	//longest_sym--;
+
+	machine.tm = is_tm;
+	machine.pda = is_pda;
 
 	return machine;
 }

@@ -165,6 +165,7 @@ struct State *State_add(struct Automaton *a0, char *name)
 	newstate->epsilon = 0;
 	newstate->syms = 0;
 	newstate->epsilon_mark = 0;
+	newstate->output_mark = 0;
 	newstate->exec = 0;
 
 	newstate->name = Name_add(a0, name, 1);

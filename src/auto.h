@@ -54,7 +54,7 @@
 //   SHRT_MAX = 32767
 
 
-   #define CELL_TYPE short
+   #define CELL_TYPE signed short int
 
 /*===========================================*/
 
@@ -170,6 +170,8 @@
 #define STR(x)   #x
 #define SHOW_DEFINE_FULL(x) fprintf(stderr, "%s = %s", #x, STR(x))
 #define SHOW_DEFINE_VALUE(x) fprintf(stderr, "%s", STR(x))
+#define CELL_TO_FILE(y,x) fprintf(y, "%s", STR(x))
+#define CELL_TO_STRING(y,x) snprintf(y, 100, "%s", STR(x))
 
 /*===========================================*/
 
@@ -186,6 +188,7 @@ struct State {
 	unsigned char reject:1;
 	unsigned char epsilon:1;      // this state contains epsilon transitions
 	unsigned char epsilon_mark:1; // used for detecting epsilon loops
+	unsigned char output_mark:1;
 	unsigned char syms:1;         // this state has symbol transitions
 	unsigned char exec:1;         // this state has a command associated
 };
